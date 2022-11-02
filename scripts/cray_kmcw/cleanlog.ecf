@@ -1,0 +1,15 @@
+# Script for cleaning logfile
+
+HOST=ecgate
+
+%include <qsub.h>
+%include <head.h>
+
+ecflow_client --label=info "Save old logfile"
+cp %ECF_LOG% /scratch/ms/at/%USER%/ecf/log/ecgate.%ECF_PORT%.ecf.log.%ECF_DATE%
+gzip /scratch/ms/at/%USER%/ecf/log/ecgate.%ECF_PORT%.ecf.log.%ECF_DATE%
+ 
+ecflow_client --label=info "Cleaning ecflow logfile"
+ecflow_client --port=%ECF_PORT% --host=%ECF_HOST% --log=clear
+
+%include <tail.h>

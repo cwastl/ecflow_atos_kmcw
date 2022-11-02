@@ -1,0 +1,128 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/progrid
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task converts FA output files to grib format
+
+SOURCE:
+    '~zat2/ecf/scripts/progrid.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/001:e
+
+COMPLETE:
+    :LEAD < :LEADT  !This task is not necessary for short runs
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, set complete 
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+#prgenvswitchto intel
+module load cray-snplauncher
+
+
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+files=%STHOST%
+user=%USER%
+
+#############################LOAD epygram environment##############################
+#. /home/ms/at/kmcw/SCR/epygram_env.sh
+###########################################################################################
+
+## workarounds to use epygram from Alexandre and not our own. Our installation leads to MPI-Errors
+## in the python program
+##echo $PATH 
+##echo "================================"
+#export PATH=$(echo $PATH | awk 'BEGIN{FS=OFS=":"}{$NF=""; NF--; $NF=""; NF--;print}')
+#
+#EPYGRAM_INSTALL_DIR=/home/ms/fr/rm9/public/EPyGrAM-0.3.6
+#export PYTHONPATH=/home/ms/fr/rm9/public/EPyGrAM-0.3.6:/home/ms/fr/rm9/public/EPyGrAM-1.3.6/site:/home/ms/fr/rm9/public
+##EPYGRAM_INSTALL_DIR=/home/ms/fr/rm9/public/EPyGrAM-1.3.6
+##export PYTHONPATH=/home/ms/fr/rm9/public/EPyGrAM-1.3.6:/home/ms/fr/rm9/public/EPyGrAM-1.3.6/site:/home/ms/fr/rm9/public
+#VORTEX_INSTALL_DIR=/home/ms/fr/sos/vortex/vortex-olive
+#export PYTHONPATH=$VORTEX_INSTALL_DIR:$VORTEX_INSTALL_DIR/src:$VORTEX_INSTALL_DIR/site:$PYTHONPATH
+#export PATH=$VORTEX_INSTALL_DIR/bin:$VORTEX_INSTALL_DIR/site/arpifs_listings/bin:$PATH
+#
+#export PATH=$PATH:$EPYGRAM_INSTALL_DIR/apptools
+#
+####################################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+
+MY_DIR=/sc1/tcwork/zat2/lb/SUMO/MEM_%MEMBER%
+
+## MPI, openMP env, etc.
+##-----------------------
+#export PSM2_RANKS_PER_CONTEXT=2
+#
+#export MPI_DSM_CPULIST="0-35:allhosts"
+#export MPI_DSM_DISTRIBUTE=1
+#export MPI_DSM_VERBOSE=1
+#
+#export MPI_MEM_ALIGN=128
+#export MPI_BUFFER_MAX=2000000
+#export MPI_BUFS_PER_PROC=1024
+#export MPI_REQUEST_MAX=400000
+#
+#export MKL_DYNAMIC=FALSE
+#export F_UFMTENDIAN=big
+#export FORT_BUFFERED=true
+#export FORT_BLOCKSIZE=1048576
+#
+#export OMP_NUM_THREADS=1
+#export OMP_DYNAMIC=FALSE
+#export KMP_STACKSIZE=500m
+#export KMP_MONITOR_STACKSIZE=500m
+#export KMP_AFFINITY=disabled
+
+[[ ! -d ${MY_DIR} ]] && mkdir -p ${MY_DIR}
+[[ ! -d ${MY_DIR}/%DATUM% ]] && mkdir -p ${MY_DIR}/%DATUM%
+[[ ! -d ${MY_DIR}/%DATUM%/%LAUF% ]] && mkdir -p ${MY_DIR}/%DATUM%/%LAUF%
+
+
+
+RUNDIR=${MY_DIR}/%DATUM%/%LAUF%
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+#rm -fr ${RUNDIR}/*
+
+#export NSLOTS=`cat $PBS_NODEFILE | wc -l`
+
+my_source=/sc1/tcwork/zat/lb/CLAEF/DATA/%DATUM%/%LAUF%/MEM_%MEMBER%/001/
+#namelist=/sc1/home/zat2/SUMO/NAMEL/FA2NETCDF.nam_AROME
+#EXEC=/sc1/home/zat2/SUMO/SCR/FA2NETCDF.py
+
+for sfxfile in $(ls ${my_source}/ICMSHAROM+0*.sfx)
+do
+   fcstep=$(echo ${sfxfile} | cut -d "+" -f 2)
+   /home/ms/at/kmw/fa_api-0.2/utils/fa_copy -r SFX.TROAD1 ${sfxfile} TROAD+${fcstep}
+done 
+#
+## namelist
+#sed -e "s:{XXXXXXXX}:%DATUM%:g"\
+#    -e "s:{FCSTRANGE}:%LEAD%:g"\
+#    -e "s:{INDIR}:${RUNDIR}:g"\
+#    -e "s:{OUTDIR}:${RUNDIR}:g"\
+#    -e "s:{ZZZZZZZZ}:%LAUF%:g" ${namelist} > ${RUNDIR}/subpy_nc.nam
+#
+#
+##/usr/bin/time aprun -n ${NSLOTS} ${EXEC} ${RUNDIR}/subpy_nc.nam  
+#/usr/bin/time ${EXEC} ${RUNDIR}/subpy_nc.nam  
+#
+#
+%include <tail.h>

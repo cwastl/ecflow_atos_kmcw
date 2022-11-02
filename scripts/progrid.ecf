@@ -1,0 +1,171 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/progrid
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task converts FA output files to grib format
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/progrid.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/001:e
+
+COMPLETE:
+    :LEAD < :LEADT  !This task is not necessary for short runs
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists for less than 3 members set task and family claef/runs/RUN_[HH]/main/MEM_[MM] complete
+    - If failure persists for more than 3 members, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+%include <sbatch.h>
+%include <head.h>
+%include <intel.h>
+%include <job_geometry.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+step15=%STEPS15%
+assimc=%ASSIMC%
+user=%USER%
+
+#################Run setup script for environment#########################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user
+##########################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+module load ecmwf-toolbox
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${PROGRIDDIR} ]] && mkdir -p ${PROGRIDDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${PROGRIDDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+C001File=$(cat ${C001DIR}/jobinfo.txt)
+
+export TSTEP=60
+
+if [ ${leadtime} -gt ${assimc} ]; then
+  step=0
+  while (( $step <= ${leadtime} )) ; do
+  
+    cstep=$(printf "%%04d" $step)
+
+    if [[ ${step15} == "1" && ${step} -lt ${leadtime} ]]
+    then
+
+      my_min="00 15 30 45"
+
+    else
+
+      my_min="00"
+
+    fi
+
+    for min in ${my_min[*]}
+    do
+      if [ ${min} == "00" ]; then
+        if [ ${mem} == "00" ]; then
+          FPOSOUTS=${FPOSOUTSIZECTL}
+        else
+          FPOSOUTS=${FPOSOUTSIZE}
+        fi
+      else
+        FPOSOUTS=${FPOSOUTSIZE15}
+      fi
+      INFILE=${C001DIR}/${C001File}/PF${EXP}${EXP}+${cstep}:${min}
+
+      (( WAITCOUNT = 0 ))
+      while [[ ${WAITCOUNT} -le 60 ]]
+      do
+        if [ -s ${INFILE} ] && [ $(/usr/bin/stat --printf="%%s" ${INFILE}) == ${FPOSOUTS} ] ; then
+ 
+          ln -sf ${INFILE} fort.11
+          status=0
+          ecflow_client --label=info "Prepare CLAEF${mem}+${cstep}:${min}.grb"
+          srun ${PROGRIDBIN} > ${LOGDIR}/PROGRID_${cstep}_%ECF_TRYNO%_${mem}.log 2>&1
+          
+          ############################################
+          ############Check number of fields##########
+          ############################################
+
+          ecflow_client --label=info "Check field number ${step}"
+
+          if [ ${mem} == "00" ] ; then
+             PROGRIDNBR=$PROGRIDOUTNBRCTL
+          else
+             PROGRIDNBR=$PROGRIDOUTNBR
+          fi
+
+          if [ $(grib_count GRIDBIZARRE) -ne ${PROGRIDNBR} ]
+          then
+
+             ecflow_client --label=error "Fieldnbr ${step} not ok"
+             echo "Fieldnbr not ok" ${step}
+             rm -f GRIDBIZARRE
+             rm -f fort.11
+             (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+             sleep 10
+
+          else
+
+             rename GRIDBIZARRE ${PROGRIDDIR}/CLAEF${mem}+${cstep}:${min}".grb" GRIDBIZARRE
+             rm -f fort.11
+             (( WAITCOUNT = 100 ))
+             ecflow_client --event=f
+
+          fi
+
+        else
+          (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+          ecflow_client --label=info "PF${EXP}${EXP}+${cstep}:${min} does not yet exist, wait!"
+          sleep 60
+        fi
+      done 
+
+      if [[ ${WAITCOUNT} -eq 61 ]] 
+      then
+         
+         ecflow_client --label=error "PF${EXP}${EXP}+${cstep}:${min} does still not exist, exit!"
+         echo "Fehler progrid" ${mem} "+" ${step} | mail -s "Fehler progrid" clemens.wastl@zamg.ac.at
+         exit 20
+   
+      fi
+    done
+
+    (( step=${step}+1 ))
+
+  done
+else
+  ecflow_client --event=f
+fi
+
+cd ${PROGRIDDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

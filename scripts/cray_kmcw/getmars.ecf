@@ -1,0 +1,159 @@
+# Script to get couplingfiles from MARS archive
+
+%include <pbs.h>
+
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+
+#################Run setup script for environment##################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg 999 $user
+###################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${MARSGET} ]] && mkdir -p ${MARSGET}
+
+RUNDIR=${MARSGET}/$PBS_JOBID
+[[ ! -d $RUNDIR ]] && mkdir -p $RUNDIR
+cd $RUNDIR
+rm -rf $RUNDIR/*
+
+(( leadtime=$leadtime+$lagg ))
+typeset -i imem
+imem=${mem} 
+
+req_gg=mars_gg.txt
+rm -f ${req_gg}
+
+cat <<EOF >> ${req_gg} 
+RET,
+#    DATABASE   = fdb5 prod,
+    DATE       = ${n1date},
+    TIME       = ${n1run},
+    STEP       = $lagg/to/${leadtime}/by/${couplfr},
+    NUMBER     = ${imem},
+    LEVTYPE    = SFC,
+    PARAM      = 32/33/39/40/41/42/139/141/170/172/183/198/235/236/35/36/37/38/238/173/174/234/27/28/29/30/43,
+    CLASS      = OD,
+    TYPE       = PF,
+    STREAM     = ENFO,
+    EXPVER     = 0001,
+    TARGET     = "ICMGGAROM+[STEP].[NUMBER]"
+RET,
+#    DATABASE   = fdb5 prod,
+    DATE       = ${n1date},
+    TIME       = ${n1run},
+    STEP       = 00,
+    NUMBER     = ${imem},
+    LEVTYPE    = SFC,
+    PARAM      = 31/34,
+    CLASS      = OD,
+    TYPE       = PF,
+    STREAM     = ENFO,
+    EXPVER     = 0001,
+    TARGET     = "ICMGGAROM.[NUMBER]"
+RET,
+#    DATABASE   = marsod,
+    DATE       = ${n1date},
+    TIME       = ${n1run},
+    STEP       = 00,
+    LEVTYPE    = SFC,
+    PARAM      = 74/163/160/161/162/15/16/17/18/66/67,
+    GRID       = O640,
+    CLASS      = OD,
+    TYPE       = AN,
+    STREAM     = OPER,
+    EXPVER     = 0001,
+    TARGET     = "ICMGGAROM"
+EOF
+
+mars ${req_gg}
+
+req_ua=mars_ua.txt
+rm -f ${req_ua}
+cat <<EOF >> ${req_ua}
+RET,
+#    DATABASE   = fdb5 prod,
+    DATE       = ${n1date},
+    TIME       = ${n1run},
+    STEP       = ${lagg}/to/${leadtime}/by/${couplfr},
+    LEVTYPE    = ML,
+    LEVELIST   = 1/to/91,
+    PARAM      = 133/203/75/76/246/247/248,
+    CLASS      = OD,
+    TYPE       = PF,
+    STREAM     = ENFO,
+    NUMBER     = ${imem}, 
+    EXPVER     = 0001,
+    TARGET     = "ICMUAAROM+[STEP].[NUMBER]"
+EOF
+
+mars ${req_ua}
+
+req_sh=mars_sh.txt
+rm -f ${req_sh}
+cat <<EOF >> ${req_sh}
+RET,
+#    DATABASE   = fdb5 prod,
+    DATE       = ${n1date},
+    TIME       = ${n1run},
+    STEP       = ${lagg}/to/${leadtime}/by/${couplfr}, 
+    LEVTYPE    = ML,
+    LEVELIST   = 1/to/91,
+    PARAM      = 152/138/155/130,
+    CLASS      = OD,
+    TYPE       = PF,
+    STREAM     = ENFO,
+    NUMBER     = ${imem},
+    EXPVER     = 0001,
+    TARGET     = "ICMSHAROM+[STEP].[NUMBER]"
+RET,
+#    DATABASE   = fdb5 prod,
+    DATE       = ${n1date}, 
+    TIME       = ${n1run}, 
+    STEP       = 00,
+    LEVTYPE    = ML,
+    LEVELIST   = 1,
+    PARAM      = 129.128,
+    CLASS      = OD,
+    TYPE       = CF,
+    STREAM     = ENFO,
+    EXPVER     = 0001,
+    TARGET     = "ICMSHAROM.Z"
+EOF
+
+mars ${req_sh}
+
+(( cstep = ${lagg} ))
+while (( ${cstep} <= ${leadtime} ))
+do
+   astep=$(printf "%%03d" $cstep)
+   if [[ -s ICMGGAROM.${imem} ]] && [[ -s ICMGGAROM ]] && [[ -s ICMGGAROM+${cstep}.${imem} ]] && [[ ICMSHAROM.Z ]] && [[ ICMSHAROM+${cstep}.${imem} ]]; then
+      cat ICMGGAROM.${imem} ICMGGAROM ICMGGAROM+${cstep}.${imem}  >> ${MARSGET}/ICMGGE903+${astep}.${mem}
+      mv ICMUAAROM+${cstep}.${imem} ${MARSGET}/ICMUAE903+${astep}.${mem}
+      cat ICMSHAROM.Z ICMSHAROM+${cstep}.${imem} >> ${MARSGET}/ICMSHE903+${astep}.${mem} 
+      ecflow_client --label=info "File +" ${astep} " copied"
+   else
+      ecflow_client --label=info "Something is missing for + " ${astep}
+   fi 
+   (( cstep = ${cstep} + ${couplfr} ))
+done
+
+cd ${MARSGET}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

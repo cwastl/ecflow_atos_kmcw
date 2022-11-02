@@ -1,0 +1,88 @@
+%manual
+TASK:
+     claef/runs/RUN_[HH]/archiv/MEM_[MEM]/archmars
+
+     [HH]=00,03,06,09,12,15,18,21; [MEM]=00,01,..,16
+
+DESCRIPTION: 
+     This task archives C-LAEF Forecasts in MARS
+
+SOURCE:
+     '~zat2/ecf/scripts/archmars.ecf'
+
+TRIGGER:
+     :ARCHIV == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/transfer == complete
+
+COMPLETE:
+     :LEAD < :LEADT or :ARCHIV == 0
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR: 
+     - If task fails check whether MARS-archive is available and rerun task
+     - If failure persist set this task complete 
+     - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+files=%STHOST%
+user=%USER%
+leadtime=%LEAD%
+
+############################Run setup script for environment##########################
+#. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 999 $user $files
+######################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+ecflow_client --label=info "Archive AROMEsumo"
+
+MY_DIR=/sc1/tcwork/zat2/lb/SUMO/MEM_%MEMBER%/%DATUM%/%LAUF%
+
+cd ${MY_DIR}
+
+tar -cvf CLAEF_%DATUM%_%LAUF%_%MEMBER%.tar AROMEsumo+*.fa
+if [[ $? -eq 0 ]]
+then
+   emkdir -p ec:SUMO/%DATUM%_%LAUF%
+   emv CLAEF_%DATUM%_%LAUF%_%MEMBER%.tar ec:SUMO/%DATUM%_%LAUF%/
+   if [[ $? -ne 0 ]]
+   then
+      echo "ARCHIVING OF MEMBER %MEMBER% did not work!"
+%include <tail.h>
+   fi
+else
+%include <tail.h>
+fi
+
+rm -rf ${MY_DIR}/AROMEsumo*fa
+
+ecflow_client --label=info "Archive TROAD"
+
+tar -cvf TROAD_%DATUM%_%LAUF%_%MEMBER%.tar TROAD+*.sfx
+if [[ $? -eq 0 ]]
+then
+   emv TROAD_%DATUM%_%LAUF%_%MEMBER%.tar ec:SUMO/%DATUM%_%LAUF%/
+   if [[ $? -ne 0 ]]
+   then
+      echo "ARCHIVING OF MEMBER %MEMBER% SFX did not work!"
+%include <tail.h>
+   fi
+else
+%include <tail.h>
+fi
+
+rm -rf ${MY_DIR}/TROAD*sfx
+
+%include <tail.h>

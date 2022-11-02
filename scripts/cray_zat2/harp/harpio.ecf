@@ -1,0 +1,88 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/harpio
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task extracts files for harp and transfers them to ZAMG.
+    This tasks runs on ecgate and runs very long (several hours).
+
+SOURCE:
+    '~zat2/ecf/scripts/harpio.ecf'
+
+TRIGGER:
+    main == complete
+
+COMPLETE:
+    :LEAD < :LEADT or :HARPIO == 0 !This task is not necessary for short runs
+
+MAIN FRAME:
+    ecgate
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists complete this task, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+HOST=ecgate
+
+source ~/.profile
+source ~/.kshrc
+
+%include <qsub2.h>
+%include <head.h>
+
+echo $(date)
+
+date=%DATUM%
+run=%LAUF%
+user=%USER%
+leadtime=%LEAD%
+modus=%MODE%
+
+if [[ %MODE% == "esuite" ]]
+then
+   leadtime=48
+fi
+
+#param=PARAM
+
+set +e
+module load R/3.6.3
+module load proj4/5.2.0
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+
+year=`echo "$date" | awk '{print substr($1,1,4)}'`
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+day=`echo "$date" | awk '{print substr($1,7,2)}'`
+
+ecflow_client --label=info "Start harp io"
+
+if [[ %MODE% = "oper" ]]
+then
+   extract_script=/home/ms/at/$(whoami)/HARP/examples/scripts/extract_grb_claef_param.R
+elif [[ %MODE% = "esuite" ]] 
+then
+   extract_script=/home/ms/at/$(whoami)/HARP/examples/scripts/extract_grb_claef_param_e.R
+fi
+
+/usr/local/apps/R/3.6.3/bin/Rscript ${extract_script} ${run} ${leadtime} %PARAM% > /scratch/ms/at/$(whoami)/CLAEF/HARP/log_io/HARPIO_%MODE%_%PARAM%_%ECF_TRYNO%.log 2>&1
+
+if [[ $? -eq 0 ]]
+then
+   ecflow_client --label=info "harp io done"
+fi
+
+echo $(date)
+
+%include <tail.h>

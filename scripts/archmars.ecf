@@ -1,0 +1,205 @@
+%manual
+TASK:
+     claef/runs/RUN_[HH]/archiv/MEM_[MEM]/archmars
+
+     [HH]=00,03,06,09,12,15,18,21; [MEM]=00,01,..,16
+
+DESCRIPTION:
+     This task archives C-LAEF Forecasts in MARS
+
+SOURCE:
+     '~zat/CLAEF/suite/scripts/archmars.ecf'
+
+TRIGGER:
+     :ARCHIV == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/transfer == complete
+
+COMPLETE:
+     :LEAD < :LEADT or :ARCHIV == 0
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+     - If task fails check whether MARS-archive is available and rerun task
+     - If failure persist set this task complete 
+     - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+
+date=%DATUM%
+run=%LAUF%
+amem=%ANZMEMB%
+mem=%MEMBER%
+user=%USER%
+
+#################Run setup script for environment#####################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 999 $user
+######################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+#environment settings
+module load wgrib
+
+[[ ! -d ${ARCHIVDIR} ]] && mkdir -p ${ARCHIVDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${ARCHIVDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -f kanzi*final
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+   type=cf
+else
+   leadtime=%LEAD%
+   type=pf
+fi
+
+class=la
+ARCHIVE="archive"
+ExpVer=1
+
+ICOUNT=0
+while (( ${ICOUNT} <= ${leadtime} )) ; do
+
+  ecflow_client --label=info "Archive ${ICOUNT}"
+
+  IICOUNT=$(echo ${ICOUNT} | awk '{printf"%%04d",$1}')
+  f=${ADDGRIBDIR}/CLAEF${mem}+${IICOUNT}:00.grb
+
+  if [[ -f ${f} ]]
+  then
+    grib_copy -w typeOfLevel!=isobaricInhPa $f splitgrib0000.data
+    grib_copy -w typeOfLevel=isobaricInhPa $f splitgrib0001.data
+
+    n=$(basename $f)
+    fcstrange=$(echo ${IICOUNT} | cut -c 3-4)
+
+    for ff in splitgrib0000.data splitgrib0001.data 
+    do
+      outfile=kanzi.tmp
+      outfile_pl=kanzi.pl.tmp
+
+     if (( $ICOUNT == 0 ))
+     then
+      (( endStepInHours_tmp = 0 ))
+     else 
+      (( endStepInHours_tmp = fcstrange - 1 ))
+     fi
+
+      if [ "${ff}" = "splitgrib0000.data" ]
+      then
+        grib_set -ssubCentre=98,centre=224,generatingProcessIdentifier=4,setLocalDefinition=1,localDefinitionNumber=1,marsClass=${class},marsType=${type},marsStream=enfo,perturbationNumber=${mem},numberOfForecastsInEnsemble=${amem} ${ff} foo
+
+        sed -e "s:{endStepInHours_tmp}:${endStepInHours_tmp}:g" \
+            -e "s:{fcstrange}:${fcstrange}:g" ${SETUPDIR}/arch_sfc.filter > sfc.filter
+
+        grib_filter -o foo2 sfc.filter foo
+
+        cp foo2 ${outfile}
+        rm -f sfc.filter
+
+# Convert Precip from mm to m =>
+        ecflow_client --label=info "Convert precip to m"
+        wgrib ${outfile} | egrep "(:kpds5=228:|:kpds5=82:|:kpds5=142:|:kpds5=143:|:kpds5=144:)" | wgrib -i -grib ${outfile} -o otto1.tmp
+        grib_set -s scaleValuesBy=0.001 otto1.tmp otto2.tmp
+        wgrib ${outfile} | egrep -v "(:kpds5=228:|:kpds5=82:|:kpds5=142:|:kpds5=143:|:kpds5=144:)" | wgrib -i -grib ${outfile} -o otto3.tmp
+        cat otto3.tmp otto2.tmp > otto4.tmp
+
+        grib_set -w P1=255 -s P1=0,step=0 otto4.tmp out.grb 
+
+        export GRIB_GRIBEX_MODE_ON=1
+        grib_set -rs bitsPerValue=16,jScansPositively=1,experimentVersionNumber=${ExpVer} out.grb ${outfile}
+
+        rm -f otto*.tmp
+
+        cat ${outfile} >> ${outfile}_final
+        mv ${outfile} ${outfile}_${mem}_${IICOUNT}
+
+      elif [ "${ff}" = "splitgrib0001.data" ]
+      then
+        grib_set -ssubCentre=98,centre=224,generatingProcessIdentifier=4,setLocalDefinition=1,localDefinitionNumber=1,marsClass=${class},marsType=${type},marsStream=enfo,perturbationNumber=${mem},numberOfForecastsInEnsemble=${amem} ${ff} foo
+
+        grib_filter -o foo2 ${SETUPDIR}/arch_pl.filter foo
+
+         # This block does not work becaus RH is not on pressure levels, relict from old LAEF
+#        cp foo2 ${outfile_pl}
+#        ecflow_client --label=info "Convert RH to percent"
+#        wgrib ${outfile_pl} | grep "kpds5=157" | wgrib -i -grib ${outfile_pl} -o otto1.tmp
+#        grib_set -s scaleValuesBy=100.0 otto1.tmp otto2.tmp
+#        wgrib ${outfile_pl} | grep -v "kpds5=157" | wgrib -i -grib ${outfile_pl} -o otto3.tmp
+#        cat otto3.tmp otto2.tmp > out.grb
+
+#        export GRIB_GRIBEX_MODE_ON=1
+#        grib_set -rs bitsPerValue=16,jScansPositively=1,experimentVersionNumber=${ExpVer} out.grb ${outfile_pl}
+#        rm -f otto*.tmp
+
+        #replaced by this
+        export GRIB_GRIBEX_MODE_ON=1
+        grib_set -rs bitsPerValue=16,jScansPositively=1,experimentVersionNumber=${ExpVer} foo2 ${outfile_pl}
+        rm -f otto*.tmp
+        #####
+
+        cat ${outfile_pl} >> ${outfile_pl}_final
+        mv ${outfile_pl} ${outfile_pl}_${mem}_${IICOUNT}
+      fi
+    done
+  else
+    ecflow_client --label=info "MARS archiving not possible for run ${date} ${run} fcstrange ${IICOUNT} member ${mem}" 
+  fi
+
+  rm -f split*
+
+  ICOUNT=$((${ICOUNT}+1))
+done
+
+# sfc file
+rm -f sedscript
+
+echo "s:GRIB:${ARCHIVE},source=${outfile}_final:g" > sedscript
+echo "s:YYYYMMDD:${date}:g" >> sedscript
+echo "s:HHMM:${run}00:g" >> sedscript
+echo "s:EXPERIMENT:${ExpVer}:g" >> sedscript
+echo "s:FCST:0\/to\/${leadtime}\/by\/1:g" >> sedscript
+echo "s:MEMBER:${mem}:g" >> sedscript
+echo "s:FDOM:${class}:g" >> sedscript
+echo "s:PERTCTRL:${type}:g" >> sedscript
+
+sed -f sedscript ${SETUPDIR}/arch_request_sfc.template > arc.sfc
+
+#cat arc.sfc
+mars arc.sfc
+
+# pressure level
+rm -f sedscript
+
+echo "s:GRIB:${ARCHIVE},source=${outfile_pl}_final:g" > sedscript
+echo "s:YYYYMMDD:${date}:g" >> sedscript
+echo "s:HHMM:${run}00:g" >> sedscript
+echo "s:EXPERIMENT:${ExpVer}:g" >> sedscript
+echo "s:FCST:0\/to\/${leadtime}\/by\/1:g" >> sedscript
+echo "s:MEMBER:${mem}:g" >> sedscript
+echo "s:FDOM:${class}:g" >> sedscript
+echo "s:PERTCTRL:${type}:g" >> sedscript
+
+sed -f sedscript ${SETUPDIR}/arch_request_pl.template > arc.pl
+
+mars arc.pl
+
+cd ${ARCHIVDIR} 
+#rm -rf ${RUNDIR}
+
+%include <tail.h>

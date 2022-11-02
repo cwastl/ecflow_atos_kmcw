@@ -1,0 +1,69 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/dummy/check_obs/dummy2
+    claef/runs/RUN_[HH]/dummy/check_main/dummy2
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This is a dummy task which is only launched if important parts of the suite are delayed or went wrong. This task runs at specific times, but it is usually
+    set complete by the families lbc, obs and main.
+
+SOURCE:
+    '~zat2/ecf/scripts/dummy2.ecf'
+
+TRIGGER:
+    for [HH] == 00:
+       runs at 02:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 06:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 03:
+       runs at 05:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 08:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 06:
+       runs at 08:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 11:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 09:
+       runs at 11:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 14:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 12:
+       runs at 14:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 18:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 15:
+       runs at 17:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 20:00 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 18:
+       runs at 20:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 23:00 or complete when claef/runs/RUN_[HH]/main == complete 
+    for [HH] == 21:
+       runs at 23:30 or complete when claef/runs/RUN_[HH]/obs == complete
+       runs at 00:25 or complete when claef/runs/RUN_[HH]/main == complete 
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, check whether the family that is checked is still running. If there are aborted
+      tasks follow its manpages. If suite is just delayed, complete this task when checked family is complete.
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+echo "Something went wrong with C-LAEF ${run}"
+ecflow_client --label=error "Something went wrong with C-LAEF ${run}"
+
+exit 1
+
+%include <tail.h>

@@ -1,0 +1,68 @@
+#Script to run getlbc to get couplingfiles from ECMWF
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+leadtime=%LEAD%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+
+#################Run setup script for environment#################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date 999 $lagg 999 $user
+##################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${LBCGET} ]] && mkdir -p ${LBCGET}
+
+cd ${LBCGET}
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+if [[ ${run} == "00" ]]
+then
+   suff="AM"
+elif [[ ${run} == "06" ]]
+then
+   suff="SX"
+elif [[ ${run} == "12" ]]
+then
+   suff="PM"
+elif [[ ${run} == "18" ]]
+then
+   suff="DH"
+fi
+
+i=0
+(( leadtime=$leadtime+$lagg ))
+while (( $i <= $leadtime )) ; do
+
+   FT=$(printf "%%03d" $i)
+
+   if [[ -s ${LBCGET}/ffei${n1date}_${n1run}00+${FT} ]]
+   then
+
+      ecflow_client --label=info "Couplingfile already exists"
+
+   else
+
+      ectrans -gateway zaaecm.zamg.ac.at -remote wastl_sgi -get -overwrite -source /AROME/COUPL/ec_coupl_${n1date}/COUPL_ECMWF_0${FT}.r${suff} -target ${LBCGET}/ffei${n1date}_${n1run}00+${FT}
+ 
+      ecflow_client --label=info "Couplingfile transferred"
+
+   fi
+
+   (( i=$i+$couplfr ))
+
+done
+
+%include <tail.h>

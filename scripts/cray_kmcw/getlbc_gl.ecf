@@ -1,0 +1,82 @@
+#Script to get couplingfiles from ECMWF for gl
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+mem=%MEMBER%
+user=%USER%
+
+####################Run setup script for environment###############
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg 999 $user
+###################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEAD%
+else
+   leadtime=%LEADCTL%
+fi
+
+[[ ! -d ${LBCDIR_GL} ]] && mkdir -p ${LBCDIR_GL}
+
+cd ${LBCDIR_GL}
+
+actdate=$(date '+%%Y%%m%%d');
+actdate1=$(/home/ms/at/${user}/bin/datecalc ${actdate} -f -t -1 | cut -c 1-8)
+
+if [[ $date == $actdate || $date == $actdate1 ]]
+then
+
+   HIST=.FALSE.
+
+else
+
+   HIST=.TRUE.
+
+fi
+ 
+i=${lagg}
+(( leadtime=$leadtime+$lagg ))
+while (( $i <= $leadtime )) ; do
+  
+   actmm=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 5-6)
+   actdd=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 7-8)
+   acthh=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 9-10)
+
+   if [[ ${HIST} == .TRUE. ]]
+   then
+
+      ecflow_client --label=info "Historic case"
+
+      if [[ ! -s ECMWF_${mem}.grb ]]
+      then
+
+         ecflow_client --label=info "Copying ECMWF coupling files from ECFS"
+         ecp ec:${LBCHIS}/${n1date}${n1run}/ECMWF_${mem}.grb.gz ${LBCDIR_GL} 
+         gunzip ECMWF_${mem}.grb.gz
+
+      else
+      
+         ecflow_client --label=info "Coupling files already there"
+
+      fi
+
+   else
+
+      ecflow_client --label=info "Current case"
+      cp ${LBCIFS}/EAX${n1mm}${n1dd}${n1run}00${actmm}${actdd}${acthh}001 ${LBCDIR_GL}     
+
+   fi
+
+   (( i=$i+$couplfr ))
+
+done
+
+%include <tail.h>

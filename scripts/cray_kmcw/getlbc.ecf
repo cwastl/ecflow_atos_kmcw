@@ -1,0 +1,125 @@
+#Script to run getlbc to get couplingfiles from ECMWF
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+leadtime=%LEAD%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+
+#################Run setup script for environment#################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date 999 $lagg 999 $user
+##################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${LBCGET} ]] && mkdir -p ${LBCGET}
+
+cd ${LBCGET}
+
+rm -fr ${LBCGET}/*
+
+ln -sf ${BINDIR}/big.rule big.rule
+
+i=0  
+(( leadtime=$leadtime+$lagg ))
+while (( $i <= $leadtime )) ; do
+
+   FT=$(printf "%%03d" $i)
+
+   actmm=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 5-6)
+   actdd=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 7-8)
+   acthh=$(/home/ms/at/${user}/bin/datecalc ${n1date}${n1run} -f -t +${i}:00 | cut -c 9-10)
+
+   (( WAITCOUNT = 0 ))
+
+   while [[ ${WAITCOUNT} -le 120 ]]
+   do
+
+     if [[ ${i} -eq 0 ]]
+     then
+
+        if [[ -f ${LBCIFS}/EAX${n1mm}${n1dd}${n1run}00${actmm}${actdd}${acthh}001 ]]
+        then
+           grib_filter big.rule ${LBCIFS}/EAX${n1mm}${n1dd}${n1run}00${actmm}${actdd}${acthh}001
+           cp 0-sol.pdg.grb_${n1date}${n1run}00+${i} landseamask.grb
+           (( WAITCOUNT = 300 ))
+        else
+           echo "Dissemination file does not yet exist!!!"
+           ecflow_client --label=info "Dissemination file +${FT} does not yet exist!!!"
+           (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+           sleep 60
+        fi 
+     
+     elif [[ ${i} -ge $lagg ]]
+     then
+
+         if [[ -f ${LBCIFS}/EAX${n1mm}${n1dd}${n1run}00${actmm}${actdd}${acthh}001 ]]
+         then
+             grib_filter big.rule ${LBCIFS}/EAX${n1mm}${n1dd}${n1run}00${actmm}${actdd}${acthh}001
+             (( WAITCOUNT = 300 ))
+         else
+             echo "Dissemination file does not yet exist!!!"
+             ecflow_client --label=info "Dissemination file +${FT} does not yet exist!!!"
+             (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+             sleep 60
+         fi                
+
+     else 
+
+         (( WAITCOUNT = 400 ))          
+
+     fi
+
+   done
+
+#-- Exit if files from dissemination do not exist
+
+   if [[ ${WAITCOUNT} -le 121 ]]
+   then
+      echo "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+      ecflow_client --label=error "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+      exit 999
+
+   elif [[ ${WAITCOUNT} -gt 300 ]]
+   then 
+      echo "File +" ${FT} " not necessary"
+      ecflow_client --label=info "File +" ${FT} " not necessary"
+
+   else 
+      echo "File +" ${FT} " copied"
+      ecflow_client --label=info "File +" ${FT} " copied"
+
+      #-- Rename grib files. MARS use %%d format for the
+      #-- filenames ith "[STEP]", we replace it with %%03d
+      #-- filenames with "[NUMBER]", we replace it with %%02d
+
+      for av in $(ls *-*.*.grb_${n1date}*+${i})
+      do
+         i1=$(echo $av |cut -d "-" -f 1 | awk '{printf "%%02d",$1}')
+         i2=$(echo $av |cut -d "-" -f 2)
+        [[ ! -f ${i1}-${i2} ]] && rename ${av} ${i1}-${i2} ${av}
+      done
+
+      for av in $(ls *-*.*.grb_${n1date}*+${i})
+      do
+         i1=$(echo $av |cut -d "+" -f 1)
+         i2=$(echo $av |cut -d "+" -f 2 | awk '{printf "%%03d",$1}')
+         rename ${av} ${i1}+${i2} ${av}
+      done
+
+   fi 
+
+   ecflow_client --event=a
+   (( i=$i+$couplfr ))
+
+done
+
+rm -f big.rule
+
+%include <tail.h>
+

@@ -1,0 +1,138 @@
+# Script to run 903
+
+%include <pbs.h>
+%include <head.h>
+
+module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+leadtime=%LEAD%
+
+#################Run setup script for environment##################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg 999 $user
+###################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${C903DIR} ]] && mkdir -p ${C903DIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${C903DIR}/$PBS_JOBID
+[[ ! -d $RUNDIR ]] && mkdir -p $RUNDIR
+cd $RUNDIR
+rm -rf $RUNDIR/*
+
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+
+let "anzahl = (${leadtime})/${couplfr} + 1"
+
+NPROMA=-32
+NPROC=$EC_total_tasks
+NSTROUT=1
+
+NEINI=0
+# export some ENV variables
+export OMP_NUM_THREADS=2 
+export DR_HOOK_IGNORE_SIGNALS=-1
+export OMP_STACKSIZE="2G"
+export KMP_STACKSIZE="2G"
+export KMP_MONITOR_STACKSIZE="2G"
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_SHOW_PROCESS_OPTIONS=0
+export MPL_MBX_SIZE=2048000000
+export EC_PROFILE_HEAP=0
+export EC_PROFILE_MEM=0
+export EC_MPI_ATEXIT=0
+export EC_MEMINFO=0
+
+if [[ ${OMP_NUM_THREADS} -eq 1 ]]
+then
+   export XLSMPOPTS="parthds=1:stack=358400000 : spins=500000 : yields=50000";
+else
+   export XLSMPOPTS="parthds=${OMP_NUM_THREADS}:stack=358400000";
+fi
+
+sed -e "s/{NPROC}/${NPROC}/"\
+    -e "s/{CNMEXP}/E903/"\
+    -e "s/{NPROMA}/${NPROMA}/"\
+    -e "s/{NSTROUT}/${NSTROUT}/"\
+    -e "s/{NFRPOS}/${anzahl}/"\
+    -e "s/{DOMAIN}/AROM/"\
+    -e "s/{CFPDIR}/ELSCF/"\
+    -e "s/{CFNCLIMOUT}/ELSCF/g" $NAMEL903 > $RUNDIR/fort.4  
+
+(( leadtime=$leadtime+$lagg ))
+actstep=${lagg}
+icount=0
+while [[ ${actstep} -le ${leadtime} ]]
+do
+    astep=$(printf "%%03d" $actstep)
+    count=$(printf "%%06d" $icount)
+
+    if [[ -s ${MARSGET}/ICMUAE903+${astep}.${mem} ]] && [[ -s ${MARSGET}/ICMSHE903+${astep}.${mem} ]] && [[ ${MARSGET}/ICMGGE903+${astep}.${mem} ]]; then    
+       ln -sf ${MARSGET}/ICMUAE903+${astep}.${mem} ICMUAE903+${count}
+       ln -sf ${MARSGET}/ICMSHE903+${astep}.${mem} ICMSHE903+${count}
+       ln -sf ${MARSGET}/ICMGGE903+${astep}.${mem} ICMGGE903+${count}
+       ecflow_client --label=info "Everything available for + " ${astep}
+    else
+       ecflow_client --label=info "Something missing for + " ${astep}
+    fi
+    (( icount = ${icount} + 1 ))
+    (( actstep = ${actstep} + ${couplfr} ))
+done
+
+astep=$(printf "%%03d" $lagg)
+
+ln -sf ${MARSGET}/ICMUAE903+${astep}.${mem} ICMUAE903INIT
+ln -sf ${MARSGET}/ICMSHE903+${astep}.${mem} ICMSHE903INIT
+ln -sf ${MARSGET}/ICMGGE903+${astep}.${mem} ICMGGE903INIT
+ln -sf ${CLIMFILENAME_AROME}${month} const.clim.AROM
+
+# grib_api environment variables determined by executable
+libpath=$(ldd $BIN903 | grep libeccodes_f90 | cut -d " " -f3)
+libpath=$(dirname $(dirname ${libpath}))
+export ECCODES_SAMPLES_PATH="$libpath/share/eccodes/ifs_samples/grib1_mlgrib2"
+export ECCODES_DEFINITION_PATH="$libpath/share/eccodes/definitions"
+
+/usr/bin/time -v mpiexec -n ${EC_total_tasks} $BIN903 > ${LOGDIR}/903_${mem}.log 2>&1
+
+if [[ $? -eq 0 ]]
+then
+   actstep=${lagg}
+   icount=0
+   while [[ ${actstep} -le ${leadtime} ]]
+   do
+      count=$(printf "%%04d" $icount)
+      bcount=$(printf "%%03d" $icount)
+      rename ELSCFE903AROM+${count} ${C903DIR}/ELSCFAROMALBC${bcount} ELSCFE903AROM+${count}
+      ecflow_client --label=info "Copy File + " ${bcount}
+    
+      (( icount = ${icount} + 1 ))
+      (( actstep = ${actstep} + ${couplfr} ))
+   done
+else
+   ecflow_client --error=info "Something went wrong for File + " ${bcount}
+fi
+
+rename NODE.001_01 ${LOGDIR}/NODE_903_000_${EXP}_${mem} NODE.001_01
+
+cd ${C903DIR}
+#rm -rf ${RUNDIR}
+
+%include <tail.h>
+

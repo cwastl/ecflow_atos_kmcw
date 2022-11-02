@@ -1,0 +1,42 @@
+%manual
+TASK:
+    claef/admin/complete
+
+DESCRIPTION:
+    This task sets suite complete (necessary to increase DATUM if something went wrong)
+
+SOURCE:
+    '~zat2/ecf/scripts/complete.ecf'
+
+TRIGGER:
+    time dependency (00:30)
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task complete and set all other tasks in suite complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+
+date=%ECF_DATE%
+sname=%SUITENAME%
+
+# report to ecflow
+ecflow_client --label=run "The date is ${date}"
+
+echo "Set suite "  ${sname} " complete"
+ecflow_client --label=info "Set suite " $sname " complete"
+#ecflow_client --force=complete recursive /${sname}/runs
+
+%include <tail.h>

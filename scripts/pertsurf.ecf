@@ -1,0 +1,87 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/pertsurf
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task perturbs some surfex fields
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/pertsurf.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/canari == complete
+
+COMPLETE:
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+    :PERTS == 0
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+user=%USER%
+
+#################Run setup script for environment#########################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user
+##########################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${PERTSURFDIR} ]] && mkdir -p ${PERTSURFDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+# Create working directory
+RUNDIR=${PERTSURFDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -rf $RUNDIR/*
+
+# Get input data (canari, guess, namelist, binary, etc.)
+cp ${CANARIANAFILESURF} ./analyse.sfx
+
+chmod 666 ./analyse.sfx
+
+ecflow_client --label=info "Pertsurf"
+
+date2=$( echo $date | cut -c7-8 )
+if [ ${run} == "00" ]; then
+   run2=1
+else
+   run2=${run}
+fi
+
+seedm=`expr ${mem} \* ${date2} \* ${run2}`
+sed -e   "s/ISEED=1/ISEED=${seedm}/g" ${NAMELPERTSURF} > ./nampert
+
+srun ${BINPERTSURF} > ${LOGDIR}/PERTSURF_${mem}.LOG 2>&1
+
+mv ${RUNDIR}/analyse.sfx ${PERTSURFDIR}
+
+cd ${PERTSURFDIR}
+
+rm -rf ${RUNDIR}
+
+%include <tail.h>

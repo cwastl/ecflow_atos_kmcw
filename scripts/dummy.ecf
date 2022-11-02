@@ -1,0 +1,32 @@
+%manual
+TASK:
+    claef/runs/dummy
+
+DESCRIPTION:
+    This is a dummy task which usually does not run, it only prevents the DATUM loop from counting up until the complete task
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/dummy.ecf'
+
+TRIGGER:
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - Nothing to be done
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+
+date=%DATUM%
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date}"
+
+echo "Nothing to be done"
+ecflow_client --label=info "nothing to be done"
+
+%include <tail.h>

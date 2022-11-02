@@ -1,0 +1,1152 @@
+#5.7.0
+suite sumo
+  edit ECF_EXTN '.ecf'
+  edit ECF_TRIES '2'
+  edit ACCOUNT 'atlaef'
+  edit ECF_INCLUDE '/home/ms/at/zat2/ecf/include'
+  edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 %SCHOST% %ECF_JOB% %ECF_JOBOUT%'
+  edit ECF_MICRO '%'
+  edit ECF_LOGPORT '38776'
+  edit ECF_LOGHOST '%SCHOST%-log'
+  edit STHOST 'sc1'
+  edit ECF_HOME '/home/ms/at/zat2/ecf'
+  edit BOND_DHS_DRY_RUN_RETRIEVE '0'
+  edit USER 'zat2'
+  edit MARS_DOUBLE_ARCHIVE '0'
+  edit ECF_OUT '/%STHOST%/tcwork/zat2/sb/CLAEF/SUMO'
+  edit SCHOST 'cca'
+  edit MARS_FOR_BOND_DATASET '345'
+  edit CNF_DEBUG '0'
+  edit ECFS_DOUBLE_ARCHIVE '0'
+  family admin
+    task complete
+      edit NP '1'
+      edit SUITENAME 'sumo'
+      edit CLASS 'ns'
+      edit NAME 'complete'
+      label run ""
+      label info ""
+      cron 00:20
+  endfamily
+  family runs
+    repeat date DATUM 20220211 20221231 1
+    task cleaning
+      trigger ./RUN_00 == complete and ./RUN_12 == complete
+      edit NP '1'
+      edit NAME 'cleaning'
+      edit CLASS 'ns'
+      label run ""
+      label info ""
+    family RUN_00
+      edit VORHI '6'
+      edit LEADCTL '60'
+      edit LAUF '00'
+      edit LEAD '60'
+      family main
+        trigger /sumo:TIME > 0545 and /sumo:TIME < 1255
+        edit ARCHIV '0'
+        edit LEADT '60'
+        family MEM_00
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '00'
+            edit NAME 'fpos_00'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'convsurf2ncdf_00'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'mv2ecfs_00'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_01
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '01'
+            edit NAME 'fpos_01'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'convsurf2ncdf_01'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'mv2ecfs_01'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_02
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '02'
+            edit NAME 'fpos_02'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_02/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '02'
+            edit NAME 'convsurf2ncdf_02'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_02/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '02'
+            edit NAME 'mv2ecfs_02'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_03
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '03'
+            edit NAME 'fpos_03'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_03/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '03'
+            edit NAME 'convsurf2ncdf_03'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_03/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '03'
+            edit NAME 'mv2ecfs_03'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_04
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '04'
+            edit NAME 'fpos_04'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_04/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '04'
+            edit NAME 'convsurf2ncdf_04'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_04/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '04'
+            edit NAME 'mv2ecfs_04'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_05
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '05'
+            edit NAME 'fpos_05'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_05/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '05'
+            edit NAME 'convsurf2ncdf_05'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_05/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '05'
+            edit NAME 'mv2ecfs_05'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_06
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '06'
+            edit NAME 'fpos_06'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_06/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '06'
+            edit NAME 'convsurf2ncdf_06'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_06/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '06'
+            edit NAME 'mv2ecfs_06'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_07
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '07'
+            edit NAME 'fpos_07'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_07/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '07'
+            edit NAME 'convsurf2ncdf_07'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_07/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '07'
+            edit NAME 'mv2ecfs_07'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_08
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '08'
+            edit NAME 'fpos_08'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_08/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '08'
+            edit NAME 'convsurf2ncdf_08'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_08/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '08'
+            edit NAME 'mv2ecfs_08'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_09
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '09'
+            edit NAME 'fpos_09'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_09/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '09'
+            edit NAME 'convsurf2ncdf_09'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_09/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '09'
+            edit NAME 'mv2ecfs_09'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_10
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '10'
+            edit NAME 'fpos_10'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_10/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '10'
+            edit NAME 'convsurf2ncdf_10'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_10/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '10'
+            edit NAME 'mv2ecfs_10'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_11
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '11'
+            edit NAME 'fpos_11'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_11/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '11'
+            edit NAME 'convsurf2ncdf_11'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_11/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '11'
+            edit NAME 'mv2ecfs_11'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_12
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '12'
+            edit NAME 'fpos_12'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_12/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '12'
+            edit NAME 'convsurf2ncdf_12'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_12/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '12'
+            edit NAME 'mv2ecfs_12'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_13
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '13'
+            edit NAME 'fpos_13'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_13/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '13'
+            edit NAME 'convsurf2ncdf_13'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_13/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '13'
+            edit NAME 'mv2ecfs_13'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_14
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '14'
+            edit NAME 'fpos_14'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_14/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '14'
+            edit NAME 'convsurf2ncdf_14'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_14/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '14'
+            edit NAME 'mv2ecfs_14'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_15
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '15'
+            edit NAME 'fpos_15'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_15/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '15'
+            edit NAME 'convsurf2ncdf_15'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_15/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '15'
+            edit NAME 'mv2ecfs_15'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_16
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '16'
+            edit NAME 'fpos_16'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_16/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '16'
+            edit NAME 'convsurf2ncdf_16'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_16/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '16'
+            edit NAME 'mv2ecfs_16'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+      endfamily
+    endfamily
+    family RUN_12
+      edit VORHI '6'
+      edit LEADCTL '48'
+      edit LAUF '12'
+      edit LEAD '48'
+      family main
+        trigger /sumo:TIME > 1745 and /sumo:TIME < 2355
+        edit ARCHIV '0'
+        edit LEADT '60'
+        family MEM_00
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '00'
+            edit NAME 'fpos_00'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'convsurf2ncdf_00'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'mv2ecfs_00'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_01
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '01'
+            edit NAME 'fpos_01'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'convsurf2ncdf_01'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'mv2ecfs_01'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_02
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '02'
+            edit NAME 'fpos_02'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_02/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '02'
+            edit NAME 'convsurf2ncdf_02'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_02/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '02'
+            edit NAME 'mv2ecfs_02'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_03
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '03'
+            edit NAME 'fpos_03'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_03/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '03'
+            edit NAME 'convsurf2ncdf_03'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_03/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '03'
+            edit NAME 'mv2ecfs_03'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_04
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '04'
+            edit NAME 'fpos_04'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_04/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '04'
+            edit NAME 'convsurf2ncdf_04'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_04/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '04'
+            edit NAME 'mv2ecfs_04'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_05
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '05'
+            edit NAME 'fpos_05'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_05/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '05'
+            edit NAME 'convsurf2ncdf_05'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_05/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '05'
+            edit NAME 'mv2ecfs_05'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_06
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '06'
+            edit NAME 'fpos_06'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_06/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '06'
+            edit NAME 'convsurf2ncdf_06'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_06/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '06'
+            edit NAME 'mv2ecfs_06'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_07
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '07'
+            edit NAME 'fpos_07'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_07/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '07'
+            edit NAME 'convsurf2ncdf_07'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_07/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '07'
+            edit NAME 'mv2ecfs_07'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_08
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '08'
+            edit NAME 'fpos_08'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_08/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '08'
+            edit NAME 'convsurf2ncdf_08'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_08/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '08'
+            edit NAME 'mv2ecfs_08'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_09
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '09'
+            edit NAME 'fpos_09'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_09/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '09'
+            edit NAME 'convsurf2ncdf_09'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_09/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '09'
+            edit NAME 'mv2ecfs_09'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_10
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '10'
+            edit NAME 'fpos_10'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_10/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '10'
+            edit NAME 'convsurf2ncdf_10'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_10/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '10'
+            edit NAME 'mv2ecfs_10'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_11
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '11'
+            edit NAME 'fpos_11'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_11/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '11'
+            edit NAME 'convsurf2ncdf_11'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_11/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '11'
+            edit NAME 'mv2ecfs_11'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_12
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '12'
+            edit NAME 'fpos_12'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_12/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '12'
+            edit NAME 'convsurf2ncdf_12'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_12/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '12'
+            edit NAME 'mv2ecfs_12'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_13
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '13'
+            edit NAME 'fpos_13'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_13/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '13'
+            edit NAME 'convsurf2ncdf_13'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_13/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '13'
+            edit NAME 'mv2ecfs_13'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_14
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '14'
+            edit NAME 'fpos_14'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_14/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '14'
+            edit NAME 'convsurf2ncdf_14'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_14/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '14'
+            edit NAME 'mv2ecfs_14'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_15
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '15'
+            edit NAME 'fpos_15'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_15/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '15'
+            edit NAME 'convsurf2ncdf_15'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_15/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '15'
+            edit NAME 'mv2ecfs_15'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+        family MEM_16
+          task sumofpos
+            edit NP '36'
+            edit MEMBER '16'
+            edit NAME 'fpos_16'
+            edit CLASS 'np'
+            label run ""
+            label info ""
+            label error ""
+          task convsurf2ncdf
+            complete :LEAD < :LEADT
+            trigger ../MEM_16/sumofpos == complete
+            edit NP '1'
+            edit MEMBER '16'
+            edit NAME 'convsurf2ncdf_16'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task mv2ecfs
+            complete :LEAD < :LEADT
+            trigger ../MEM_16/convsurf2ncdf == complete
+            edit NP '1'
+            edit MEMBER '16'
+            edit NAME 'mv2ecfs_16'
+            edit CLASS 'nf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+        endfamily
+      endfamily
+    endfamily
+  endfamily
+endsuite
+# enddef

@@ -1,0 +1,86 @@
+# Script to run SSTEX for assimilation
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+user=%USER%
+
+############################Run setup script for environment#########
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem 999 $assimc $user
+#####################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${SSTEXDIR} ]] && mkdir -p ${SSTEXDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+# Create working directory
+RUNDIR=${SSTEXDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -rf $RUNDIR/*
+
+# Environmental settings
+prgenvswitchto intel
+
+export OMP_NUM_THREADS=1
+#export MALLOC_CHECK_=0
+export MALLOC_CHECK_=3
+export DR_HOOK=0                  # Dr. Hook is for the traceback errors, but it's now disabled
+export DR_HOOK_NOT_MPI="yes"      # had to be added - crashing otherwise (calling to MPI). Maybe because sst_exc. is single task (non-MPI) job?
+export DR_HOOK_SILENT=0           # prints out error messages but doesn't terminate the job
+export DR_HOOK_IGNORE_SIGNALS=-1  # ignores all possible signals
+
+# Get input data (ELSC*, namelist, binary, etc.)
+try_guess=1
+found=0
+echo $GUESSFILE1
+while (( $try_guess <= 9 )) && (( $found < 1 )) # loop through all possible guessfiles
+do
+
+  ecflow_client --label=info "Try guess file ${try_guess}"
+  eval "actfile=\$GUESSFILE${try_guess}"
+
+  if [ -s  ${actfile} ]
+  then
+     if (( $? == 0 ))
+     then
+        found=1
+        cp $actfile ./AROME_GUESS
+        try_guess=20
+     fi
+   fi
+   let "try_guess = $try_guess+1"
+
+done
+
+cp ${SSTEXANAFILE} ./IFS_ANALYSE
+
+cp AROME_GUESS Blend_sea0
+
+# Copy namelist
+cp ${NAMELSSTEX1} fort.4
+
+ecflow_client --label=info "Blendsur1"
+/usr/bin/time -v ${BLENDSURBIN}
+
+rm -f fort.4
+cp AROME_GUESS AROME_SSTOK
+cp ${NAMELSSTEX2} fort.4
+
+ecflow_client --label=info "Blendsur2"
+/usr/bin/time -v ${BLENDSURBIN}
+
+chmod 666 AROME_SSTOK
+mv AROME_SSTOK ${SSTEXDIR}/AROME_SSTOK
+
+cd ${SSTEXDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

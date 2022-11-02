@@ -1,0 +1,156 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/varbccomb
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task copys GNSS coefficients and merges VARBC files
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/varbccomb.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/addsurf == complete
+
+COMPLETE: 
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set this task complete.
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+user=%USER%
+
+
+#################Run setup script for environment#########################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user
+##########################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+FILE3=${VARBCFILE}${run}_${mem}
+FILE1=${VARBCFILE}${p1run}_${mem}
+FILE2=${VARBCFILE}${p2run}_${mem}
+stations=`awk '{print $1}' ${LIST_GPS} `
+
+[[ ! -d ${VARBCCOMBDIR} ]] && mkdir -p ${VARBCCOMBDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${VARBCCOMBDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+cp $FILE3 VARBC.cycle.tmp
+
+ecflow_client --label=info "MERGING OF GNSS VARBC"
+
+echo ''
+echo '*****************************************'
+echo '**** MERGING OF GNSS VARBC FILE INFO ****'
+echo '*****************************************'
+echo ''
+
+for statid in $stations
+do
+
+  LNR1a=$(grep -n stat="${statid}" "${FILE1}" | awk -F: '{print $1+4}')
+  LNR1b=$(grep -n stat="${statid}" "${FILE1}" | awk -F: '{print $1+5}')
+  LNR2a=$(grep -n stat="${statid}" "${FILE2}" | awk -F: '{print $1+4}')
+  LNR2b=$(grep -n stat="${statid}" "${FILE2}" | awk -F: '{print $1+5}')
+  LNR3a=$(grep -n stat="${statid}" "${FILE3}" | awk -F: '{print $1+4}')
+  LNR3b=$(grep -n stat="${statid}" "${FILE3}" | awk -F: '{print $1+5}')
+
+  llboth=1
+
+  aa=${LNR1a:=0}
+  bb=${LNR2a:=0}
+  cc=${LNR3a:=0}
+
+  if [ $aa -lt 1 ] ; then
+    llboth=0
+  fi
+
+  if [ $bb -lt 1 ] ; then
+    llboth=0
+  fi
+
+  if [ $cc -lt 1 ] ; then
+    llboth=0
+  fi
+
+  if [ $llboth -gt 0 ] ; then
+
+    echo 'GNSS station id: ',$statid, 'merged' >> ${LOGDIR}/VARBCCOMB_${mem}.log 2>&1
+    ecflow_client --label=info "GNSS station id: $statid merged"
+
+    EXPR1a=$(awk NR=="$LNR1a" "${FILE1}" | sed "s/=/ /" | awk '{print $2}')
+    EXPR1b=$(awk NR=="$LNR1b" "${FILE1}" | sed "s/=/ /" | awk '{print $2}')
+    EXPR2a=$(awk NR=="$LNR2a" "${FILE2}" | sed "s/=/ /" | awk '{print $2}')
+    EXPR2b=$(awk NR=="$LNR2b" "${FILE2}" | sed "s/=/ /" | awk '{print $2}')
+    EXPR3a=$(awk NR=="$LNR3a" "${FILE3}" | sed "s/=/ /" | awk '{print $2}')
+    EXPR3b=$(awk NR=="$LNR3b" "${FILE3}" | sed "s/=/ /" | awk '{print $2}')
+    # other 2 predictors
+    EXPR1a2=$(awk NR=="$LNR1a" "${FILE1}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR1a3=$(awk NR=="$LNR1a" "${FILE1}" | sed "s/=/ /" | awk '{print $4}')
+    EXPR1b2=$(awk NR=="$LNR1b" "${FILE1}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR1b3=$(awk NR=="$LNR1b" "${FILE1}" | sed "s/=/ /" | awk '{print $4}')
+    EXPR2a2=$(awk NR=="$LNR2a" "${FILE2}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR2a3=$(awk NR=="$LNR2a" "${FILE2}" | sed "s/=/ /" | awk '{print $4}')
+    EXPR2b2=$(awk NR=="$LNR2b" "${FILE2}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR2b3=$(awk NR=="$LNR2b" "${FILE2}" | sed "s/=/ /" | awk '{print $4}')
+    EXPR3a2=$(awk NR=="$LNR3a" "${FILE3}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR3a3=$(awk NR=="$LNR3a" "${FILE3}" | sed "s/=/ /" | awk '{print $4}')
+    EXPR3b2=$(awk NR=="$LNR3b" "${FILE3}" | sed "s/=/ /" | awk '{print $3}')
+    EXPR3b3=$(awk NR=="$LNR3b" "${FILE3}" | sed "s/=/ /" | awk '{print $4}')
+
+    sed " ${LNR3a} s/${EXPR3a}/${EXPR2b}/g " VARBC.cycle.tmp > VARBC.cycle.out
+    sed " ${LNR3b} s/${EXPR3b}/${EXPR1b}/g " VARBC.cycle.out > VARBC.cycle.tmp
+    # other 2 predictors
+    sed " ${LNR3a} s/${EXPR3a2}/${EXPR2b2}/g " VARBC.cycle.tmp > VARBC.cycle.out
+    sed " ${LNR3b} s/${EXPR3b2}/${EXPR1b2}/g " VARBC.cycle.out > VARBC.cycle.tmp
+    sed " ${LNR3a} s/${EXPR3a3}/${EXPR2b3}/g " VARBC.cycle.tmp > VARBC.cycle.out
+    sed " ${LNR3b} s/${EXPR3b3}/${EXPR1b3}/g " VARBC.cycle.out > VARBC.cycle.tmp
+
+  else
+
+    echo 'GNSS station id: ',$statid, 'not merged' >> ${LOGDIR}/VARBCCOMB_${mem}.log 2>&1
+    ecflow_client --label=info "GNSS station id: $statid not merged"
+
+  fi
+
+done
+
+echo 'copy VARBC file' >> ${LOGDIR}/VARBCCOMB_${mem}.log 2>&1
+ecflow_client --label=info "Copy VARBC file"
+
+cp VARBC.cycle.tmp ${VARBCFILE}${run}_${mem}
+rm -f VARBC.cycle.tmp
+
+cd ${VARBCCOMBDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

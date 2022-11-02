@@ -1,0 +1,76 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/mirror
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task mirrors between sc1 and sc2
+
+SOURCE:
+    '~zat/CLAEF/scripts/mirror.ecf'
+
+TRIGGER:
+    time claef/runs/RUN_[HH]/main == complete
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+amem=%ANZMEMB%
+files=%STHOST%
+user=%USER%
+
+############################Run setup script for environment#########################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 999 $user $files
+#####################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+i=0
+while (( ${i} <= ${amem} -1 )) ; do
+
+   ii=$(printf "%%02d" $i)
+
+   ecflow_client --label=info "Copying 001 of MEM_${ii}"
+   if [ -d ${ORIGFS}/DATA/${date}/${run}/MEM_${ii}/001 ] ; then
+
+      if [ ! -d ${MIRRORFS}/DATA/${date}/${run}/MEM_${ii} ] ; then 
+
+        mkdir -p ${MIRRORFS}/DATA/${date}/${run}/MEM_${ii}
+
+      fi
+
+      cp -r ${ORIGFS}/DATA/${date}/${run}/MEM_${ii}/001 ${MIRRORFS}/DATA/${date}/${run}/MEM_${ii}/001
+
+   fi
+
+   (( i=${i}+1 ))
+
+done
+
+
+ecflow_client --label=info "Copying BIN, NAMEL and CLIM"
+cp -r ${ORIGFS}/BIN ${MIRRORFS}
+cp -r ${ORIGFS}/CLIM ${MIRRORFS}
+cp -r ${ORIGHO}/NAMEL ${MIRRORHO}
+cp -r ${ORIGHO}/SCR ${MIRRORHO}
+cp -r ${ORIGHO}/SRC ${MIRRORHO}
+
+%include <tail.h>

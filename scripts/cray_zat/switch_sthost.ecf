@@ -1,0 +1,66 @@
+%manual
+TASK:
+    claef/admin/operator/switch_sthost
+
+DESCRIPTION:
+    This task switches sthost between sc1 and sc2
+
+SOURCE:
+    '~zat/CLAEF/scripts/switch_sthost'
+
+TRIGGER:
+    manually
+
+MAIN FRAME:
+    ecgate
+
+OPERATOR:
+    - Execute this task if the filesystem has to be changed
+    - In case of problems please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+HOST=ecgate
+
+%include <qsub.h>
+# Environmental settings
+source ~/.profile
+source ~/.kshrc
+module load python3
+%include <head.h>
+
+from_host=%STHOST%
+
+LS=/home/ma/emos/bin/ls3.py
+
+client="ecflow_client --port %ECF_PORT% --host %ECF_HOST%"
+
+$LS -H $ECF_HOST -p $ECF_PORT -V -R -v /%SUITE% | grep $from_host | grep -E -v "(ECF_SCRIPT|ECF_JOB)" > %ECF_HOME%/ecf_out/list.tmp
+
+case $from_host in
+
+  sc1) to_host=sc2
+       ;;
+  sc2) to_host=sc1
+       ;;
+  *)   echo "ERROR: unknown STHOST " %STHOST% 
+       exit 1
+       ;;
+esac
+
+ecflow_client --label=info "Change STHOST from $from_host to $to_host"
+
+# replace
+while read -r path val;  do
+  p=$(echo $path | cut -d: -f1);
+  name=$(echo $path | cut -d: -f2);
+  newval=${val/${from_host}/${to_host}}
+  $client --alter=change variable $name $newval $p;
+done < %ECF_HOME%/ecf_out/list.tmp
+
+message="SCHOST = %SCHOST%  STHOST = $to_host"
+
+%include <tail.h>

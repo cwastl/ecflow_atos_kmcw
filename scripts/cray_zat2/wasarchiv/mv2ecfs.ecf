@@ -1,0 +1,108 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/mv2ecfs
+
+    [HH]=00,12; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task archives C-LAEF Files in MARS
+
+SOURCE:
+    '~zat2/ecf/scripts_wasarchiv/mv2ecfs.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/copy == complete
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+files=%STHOST%
+user=%USER%
+
+if [ -s /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/archiv.txt ]
+then
+
+   while IFS=" " read date run; do
+
+      checkf=$(els ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem})
+      if [ -z "$checkf" ]
+      then
+
+         # report to ecflow
+         ecflow_client --label=run "The date is now ${date} ${run}"
+         ecflow_client --label=info "Archive $date $run"
+
+         #############################Run setup script for environment###########################
+         #. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 999 $user $files#
+         #####################################################################################
+
+         cd /${files}/tcwork/${user}/lb/CLAEF/ARCHIV/${date}/${run}/MEM_${mem}
+
+         ecflow_client --label=info "Create directory on ECFS"
+         emkdir -p ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}
+
+         ecflow_client --label=info "Copying guess to ECFS"
+         tar -czvf GUESS.tar.gz GUESS
+         ecp -n GUESS.tar.gz ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}/
+         rm -f GUESS.tar.gz
+
+         ecflow_client --label=info "Copying Canari to ECFS"
+         tar -czvf CANARI.tar.gz CANARI
+         ecp -n CANARI.tar.gz ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}/
+         rm -f CANARI.tar.gz
+
+         ecflow_client --label=info "Copying Minim to ECFS"
+         tar -czvf MINIMIZATION.tar.gz MINIMIZATION
+         ecp -n MINIMIZATION.tar.gz ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}/
+         rm -f MINIMIZATION.tar.gz
+
+         ecflow_client --label=info "Copying Pertsurf to ECFS"
+         tar -czvf PERTSURF.tar.gz PERTSURF
+         ecp -n PERTSURF.tar.gz ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}/
+         rm -f PERTSURF.tar.gz
+
+         ecflow_client --label=info "Copying coupl to ECFS"
+         tar -czvf COUPL.tar.gz COUPL
+         ecp -n COUPL.tar.gz ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem}/
+         rm -f COUPL.tar.gz
+
+         if [ -s /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/trigger.txt ]
+         then
+
+            if [ $mem == "00" ]
+            then
+
+               ecflow_client --label=info "Copying trigger.txt"
+               ecp -n /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/trigger.txt ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/
+
+            else
+
+               ecflow_client --label=info "Only for member 00"
+
+            fi
+
+         fi
+
+      else
+
+         ecflow_client --label=info "$date $run already archived"
+
+      fi
+
+   done < /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/archiv.txt
+
+else
+
+   ecflow_client --label=info "No archive for $date $run"
+
+fi
+
+%include <tail.h>

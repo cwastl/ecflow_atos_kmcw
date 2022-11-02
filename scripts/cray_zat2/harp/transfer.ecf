@@ -1,0 +1,166 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/harpio
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task extracts files for harp and transfers them to ZAMG.
+    This tasks runs on ecgate and runs very long (several hours).
+
+SOURCE:
+    '~zat2/ecf/scripts/harpio.ecf'
+
+TRIGGER:
+    main == complete
+
+COMPLETE:
+    :LEAD < :LEADT or :HARPIO == 0 !This task is not necessary for short runs
+
+MAIN FRAME:
+    ecgate
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists complete this task, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+HOST=ecgate
+
+source ~/.profile
+source ~/.kshrc
+
+%include <qsub2.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+user=%USER%
+leadtime=%LEAD%
+modus=%MODE%
+
+set +e
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+
+year=`echo "$date" | awk '{print substr($1,1,4)}'`
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+day=`echo "$date" | awk '{print substr($1,7,2)}'`
+
+if [[ %MODE% = "oper" ]]
+then
+   sqlite_dir=/scratch/ms/at/$(whoami)/CLAEF/HARP/sqlite_oper/CLAEF/
+   t_dir=/HARP/CLAEF
+   OKFILE=CLAEF.ok
+elif [[ %MODE% = "esuite" ]] 
+then
+   sqlite_dir=/scratch/ms/at/$(whoami)/CLAEF/HARP/sqlite_esuite/CLAEF/
+   t_dir=/HARP/CLAEF_ESUITE
+      OKFILE=CLAEF_E.ok
+fi
+
+cd ${sqlite_dir}/${year}/${month}
+
+
+ecflow_client --label=info "Start tarzip"
+rm -f %MODE%_${year}_${month}.tar.gz
+tar czvf %MODE%_${year}_${month}.tar.gz FCTABLE*${year}${month}_${run}.sqlite
+
+ecflow_client --label=info "%MODE%_${year}_${month}.tar.gz"
+
+(( CHECKTRANS = 1 ))
+(( CHECKTRANSOK = 1 ))
+while (( ${CHECKTRANS} < 20 ))
+do
+
+   ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source %MODE%_${year}_${month}.tar.gz -target ${t_dir}/%MODE%_${year}_${month}.tar.gz \
+           -overwrite -verbose -mailto florian.weidle@zamg.ac.at -onfailure
+
+   CODEREP=$?
+   if (( ${CODEREP} !=0 ))
+   then
+
+      ecflow_client --label=info "Copying %MODE%_${year}_${month}.tar.gz failed, ${CHECKTRANS}"
+      (( CHECKTRANS = ${CHECKTRANS} + 1 ))
+      sleep 60
+
+   else
+
+      (( CHECKTRANS = 30 ))
+      echo ${date}${run} > ${OKFILE}
+      sleep 10
+       
+      while (( ${CHECKTRANSOK} < 20 ))
+      do
+
+         ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${OKFILE} -target ${t_dir}/${OKFILE} \
+                 -overwrite -verbose -mailto florian.weidle@zamg.ac.at -onfailure
+
+         sleep 10
+
+         ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${OKFILE} -target ${t_dir}/${OKFILE} \
+                 -overwrite -verbose -mailto florian.weidle@zamg.ac.at -onfailure    #just for security because of problems with file system at ZAMG
+
+         sleep 10
+         CODEREP2=$?
+         if (( ${CODEREP2} !=0 ))
+         then
+
+            ecflow_client --label=info "Copying ${OKFILE} failed, ${CHECKTRANSOK}"
+            (( CHECKTRANSOK = ${CHECKTRANSOK} + 1 ))
+            sleep 60
+
+         else
+
+            (( CHECKTRANSOK = 30 ))
+
+         fi
+
+      done
+
+   fi
+
+done
+
+if (( ${CHECKTRANS} == 20 || ${CHECKTRANSOK} == 20 ))
+then
+
+    ecflow_client --label=error "Copying failed, exit"
+    exit 90
+
+else
+
+    ecflow_client --label=info "Copying successful"
+    rm -f %MODE%_${year}_${month}.tar.gz
+    rm -f ${OKFILE}
+      
+fi
+
+#LEAD=0
+#echo ${date}${run} > CLAEF_ESUITE.ok 
+#if [[ %MODE% = "oper" ]]
+#then
+#
+#    while [[ ${LEAD} -le 60 ]]
+#    do
+#
+#       cstep=$(printf "%%02d" ${LEAD})
+#       ectrans -gateway zaaecm99.zamg.ac.at -remote nwpmodelle -put -source /scratch/ms/at/zat2/CLAEF/00_esuite/MEM_00/CLAEF00+00${cstep}:00.grb -target /../../CLAEF_ESUITE/PRODUCTION/GRIB/00/ -overwrite -verbose -mailto clemens.wastl@zamg.ac.at -onfailure
+#       (( LEAD = ${LEAD} + 1 ))
+#
+#    done
+#
+#    ectrans -gateway zaaecm99.zamg.ac.at -remote nwpmodelle -put -source CLAEF_ESUITE.ok -target /../../CLAEF_ESUITE/PRODUCTION/GRIB/00/ -overwrite -verbose -mailto clemens.wastl@zamg.ac.at -onfailure
+# 
+#    rm -f CLAEF_ESUITE.ok
+#  
+#fi
+%include <tail.h>

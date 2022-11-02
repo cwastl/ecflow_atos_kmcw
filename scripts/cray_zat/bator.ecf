@@ -1,0 +1,327 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/obs/bator
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task converts and cuts surface observations files
+
+SOURCE:
+    '~zat/CLAEF/scripts/bator.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs == complete
+
+COMPLETE:
+    :ASSIM == 0     !run C-LAEF without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set :ASSIM == 0 in family claef/runs/RUN_[HH]/obs and requeue family (run without data assimilation), set :ASSIM == 0 in family
+      claef/runs/RUN_[HH]/main. Don't forget to set :ASSIM == 1 back in family claef/runs/RUN_[HH]/obs and to remove :ASSIM local variable in family claef/runs/RUN_[HH]/main/MEM_[MM], after run ended successfully.)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+files=%STHOST%
+user=%USER%
+
+set +e
+
+############################Run setup script for environment#########################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 999 $user $files
+#####################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+module load cray-snplauncher
+prgenvswitchto intel
+module swap intel/18.0.0.033
+
+LNATIONAL=.FALSE.
+LMETAROBS=.TRUE.
+LHYDROOBS=.TRUE.
+
+[[ ! -d ${BATORDIR} ]] && mkdir -p ${BATORDIR}
+[[ ! -d ${LOGDIRBATOR} ]] && mkdir -p ${LOGDIRBATOR}
+
+RUNDIR=${BATORDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+cd ${OBSDIR}
+
+if [ -s $OBSFILE1 ] ; then
+  export OBSFILEZAMG=$OBSFILE1
+  ecflow_client --label=info "ZAMG SYNOP+TAWES file there"
+elif [ -s ${OBSFILE2} ] ; then
+  echo "no ZAMG SYNOP+TAWES file try synop only"
+  ecflow_client --label=info "No ZAMG SYNOP+TAWES file try synop only"
+  cp ${OBSFILE2} $OBSFILE1
+  export OBSFILEZAMG=$OBSFILE1
+else
+  touch $OBSFILE1
+  export OBSFILEZAMG=$OBSFILE1
+  echo "no ZAMG OBS file at all"
+  ecflow_client --label=info "No ZAMG OBS file at all - try only OPLACE"
+  
+fi
+
+if [ -s $OBSFILE3 ] ;then
+  tar xvf $OBSFILE3
+
+  rm -rf grib_7_seviri* bufr_7_* bufr_3_* obsoul_2_xxxxxx_xx_* obsoul_5_xxxxxx_xx_* obsoul_6_xxxxxx_xx_* obsoul_7_xxxxxx_xx_* bufr_6_*
+
+  if [ -s ${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}.gz ]
+  then
+    gunzip -f ${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}.gz
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}
+  elif [ -s ${OBSDIR}/obsoul_1_xxxxxx_xx_${date1}${hh1}.gz ]
+  then
+    gunzip -f ${OBSDIR}/obsoul_1_xxxxxx_xx_${date1}${hh1}.gz
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date1}${hh1}
+  elif [ -s ${OBSDIR}/obsoul_1_xxxxxx_xx_${date2}${hh2}.gz ]
+  then
+    gunzip -f ${OBSDIR}/obsoul_1_xxxxxx_xx_${date2}${hh2}.gz
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date2}${hh2}
+  elif [ -s ${OBSDIR}/obsoul_1_xxxxxx_xx_${date3}${hh3}.gz ]
+  then
+    gunzip -f ${OBSDIR}/obsoul_1_xxxxxx_xx_${date3}${hh3}.gz
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date3}${hh3}
+  elif [ -s ${OBSDIR}/obsoul_1_xxxxxx_xx_${date4}${hh4}.gz ]
+  then
+    gunzip -f ${OBSDIR}/obsoul_1_xxxxxx_xx_${date4}${hh4}.gz
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date4}${hh4}
+  else
+    rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*.gz
+    touch ${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}
+    export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}
+    echo "no proper OPLACE OBS file"
+    ecflow_client --label=info "No proper OPLACE OBS file"
+  fi
+
+else
+  echo "no OPLACE OBS file at all"
+  ecflow_client --label=info "No OPLACE file at all"
+  touch ${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}
+  export OBSFILEOPLACE=${OBSDIR}/obsoul_1_xxxxxx_xx_${date}${run}
+fi
+
+###merge observation files if both available###########
+if [ -s ${OBSFILEOPLACE} ] && [ -s ${OBSFILEZAMG} ] ; then
+  ecflow_client --label=info "Merging OBSFILES"
+  ls ${OBSFILEOPLACE} > LISTFILE
+  ls ${OBSFILEZAMG} >> LISTFILE
+
+  ##### add metar observations (optional) ######
+  if [[ ${LMETAROBS} = ".TRUE." ]] && [ -s $OBSFILE13 ] ; then
+    ls $OBSFILE13 >> LISTFILE
+  fi
+
+  #### add hydrological,environment station observations (optional) ##
+  if [[ ${LHYDROOBS} = ".TRUE." ]] && [ -s $OBSFILE14 ] ; then
+    ls $OBSFILE14 >> LISTFILE
+  fi
+  ### add additional OPLACE synop data ##
+  if [[ $LNATIONAL = ".TRUE." ]] && [ -s $OBSFILE3b ] ; then
+    countries="cz sk si hu ro cr hr"
+    tar xvf $OBSFILE3b
+    for cc in $countries ; do
+      if [[ -s obsoul_1_xxxxxy_${cc}_${date}${run}.gz ]] ; then
+        gunzip -f obsoul_1_xxxxxy_${cc}_${date}${run}.gz
+      fi
+      [ -s obsoul_1_xxxxxy_${cc}_${date}${run} ] && ls obsoul_1_xxxxxy_${cc}_${date}${run} >>LISTFILE
+    done
+  fi
+
+  ${MERGEOBSBIN} -obsoul OBSFILE -files LISTFILE
+
+  rm -f LISTFILE
+  rm -f ${OBSDIR:="xxx"}/obsoul_1_xxxxxx_xx_*
+
+  mv OBSFILE ${BATORDIR}/
+
+elif [ -s $OBSFILEZAMG ] ; then
+  cp ${OBSFILEZAMG} ${BATORDIR}/OBSFILE
+elif [ -s ${OBSFILEOPLACE} ] ; then
+  cp ${OBSFILEOPLACE} ${BATORDIR}/OBSFILE
+else
+  echo "no obsfile at all - exit 44"
+  ecflow_client --label=error "No obsfile at all"
+  exit 44
+fi
+
+##########################################################
+###create ficdatefile with assimilation window ##########
+rm -f ${BATORDIR}/ficdate
+echo "${ficleft}00" > ${BATORDIR}/ficdate
+echo "${ficright}00" >> ${BATORDIR}/ficdate
+##########################################################
+
+cd ${RUNDIR}
+
+# MPI, openMP env, etc.
+#-----------------------
+export PSM2_RANKS_PER_CONTEXT=2
+
+export MPI_DSM_CPULIST="0-35:allhosts"
+export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_VERBOSE=1
+
+export MPI_MEM_ALIGN=128
+export MPI_BUFFER_MAX=2000000
+export MPI_BUFS_PER_PROC=1024
+export MPI_REQUEST_MAX=400000
+
+export MKL_DYNAMIC=FALSE
+export F_UFMTENDIAN=big
+export FORT_BUFFERED=true
+export FORT_BLOCKSIZE=1048576
+
+export OMP_NUM_THREADS=1
+export OMP_DYNAMIC=FALSE
+export KMP_STACKSIZE=500m
+export KMP_MONITOR_STACKSIZE=500m
+export KMP_AFFINITY=disabled
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+export EC_PROFILE_HEAP=0
+
+NPROMA=-32
+export NPROC=$EC_total_tasks
+NPRGPEW=1
+NPRGPNS=1
+NPRTRV=$NPRGPEW
+NPRTRW=$NPRGPNS
+NSTRIN=$NPROC
+NSTROUT=$NPROC
+
+export NPOOLS=1
+export BATOR_NBPOOL=1
+
+export BATOR_NBSLOT=1
+export ODB_IO_METHOD=1
+export ODB_CMA=ECMA
+export BATOR_LAMFLAG=1
+
+#cy43
+export BATOR_WINDOW_LEN=180
+export BATOR_WINDOW_SHIFT=-90
+export BATOR_SLOT_LEN=0
+export BATOR_CENTER_LEN=0
+
+export IOASSIGN=IOASSIGN
+export ODB_ANALYSIS_DATE=$date
+export ODB_ANALYSIS_TIME=${run}0000
+export ODB_SRCPATH_ECMA=${RUNDIR}/ECMA
+export ODB_DATAPATH_ECMA=${RUNDIR}/ECMA
+export ODB_FEBINPATH="."
+
+export TIME_INIT_YYYYMMDD=$date
+export TIME_INIT_HHLMMSS=${run}0000
+
+
+export TO_ODB_ECMWF=0
+export TO_ODB_SWAPOUT=0
+export ODB_DEBUG=0
+export ODB_CTX_DEBUG=0
+export ODB_REPRODUCIBLE_SEQNO=2
+export ODB_STATIC_LINKING=1
+export ODB_IO_METHOD=1
+export F_RECLUNIT=WORD
+export out_BASE=ECMA
+export ODB_ECMA_CREATE_POOLMASK=1
+export ODB_ECMA_POOLMASK_FILE=$RUNDIR/$out_BASE/ECMA.poolmask
+
+# get input data (ELSC*, namelist, binary, etc.)
+cp ${BATORDIR}/OBSFILE ./OBSOUL.conv
+cp ${CLIMDIR}/LISTE_NOIRE_DIAP .
+cp ${IOASSIGNBIN} ./ioassign
+cp ${NAMELLAMFLAG} ./NAM_lamflag
+cp ${NAMELBATOR} ./NAMELIST
+cp ${CIOASSIGNBIN} ./create_ioassign
+cp ${BATORDIR}/ficdate ./ficdate
+cp ${CLIMFILENAME_BATOR} param.cfg
+cp ${CLIMDIR}/LIST_GPSSOL list_gpssol
+# new in cy43
+cp ${BATORMAPSURF} batormap
+
+ecflow_client --label=info "Create IOASSIGN"
+./create_ioassign -l${ODB_CMA} -n${BATOR_NBPOOL} > ${LOGDIRBATOR}/CREATEIOASSIGN_%ECF_TRYNO%.log 2>&1
+
+/usr/bin/time -v mpiexec -n ${NPROC} $BATORBIN > ${LOGDIRBATOR}/BATOR_%ECF_TRYNO%.log 2>&1
+
+tar cvf ecma_raw.tar ECMA*
+mv ECMA ECMA.conv
+
+# name of merged database
+out_BASE=ECMA
+export SWAPP_ODB_IOASSIGN=$RUNDIR/ioassign
+export ODB_SRCPATH_ECMA=$RUNDIR/$out_BASE
+export ODB_DATAPATH_ECMA=$RUNDIR/$out_BASE
+
+liste=""
+
+liste=${liste}" -t "conv
+
+cp $MERGEBIN ./merge_ioassign
+
+ecflow_client --label=info "Merge IOASSIGN"
+./merge_ioassign -d $RUNDIR ${liste}
+
+unset liste
+
+export IOASSIGN=$RUNDIR/$out_BASE/IOASSIGN
+export ODB_ECMA_CREATE_POOLMASK=1
+export ODB_ECMA_POOLMASK_FILE=$RUNDIR/$out_BASE/ECMA.poolmask
+export TIME_INIT_YYYYMMDD=$date
+export TIME_INIT_HHLMMSS=${run}0000
+
+# get number of pools
+na=`head -5 ${out_BASE}/ECMA.dd | tail -1`
+nb=1
+
+ln -s $SHUFFLEBIN shuffle
+
+#aprun -n 1 ./shuffle -i$out_BASE -o$out_BASE -b$nb -a$na
+ecflow_client --label=info "Shuffle"
+/usr/bin/time -v mpiexec -n 1 ./shuffle -i$out_BASE -o$out_BASE -b$nb -a$na > ${LOGDIRBATOR}/SHUFFLE_%ECF_TRYNO%.log 2>&1
+
+# save merged bases (including sub bases)
+tar cvf ECMA_merged.tar $out_BASE ECMA.*
+
+mv ecma_raw.tar ${BATORODBFILE}
+mv ECMA_merged.tar ${BATORDIR}/ECMA_merged.tar
+cp $out_BASE/ECMA.dd ${BATORDIR}/ECMA.dd
+
+cd ${BATORDIR}
+
+rm -rf ${RUNDIR}
+
+%include <tail.h>
+

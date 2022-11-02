@@ -1,0 +1,138 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/harp/harpio
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task extracts files for harp and transfers them to ZAMG.
+    This tasks runs on ecgate and runs very long (several hours).
+
+SOURCE:
+    '~zat/CLAEF/scripts/harpio.ecf'
+
+TRIGGER:
+    HARPI == 1 and ../main == complete
+
+COMPLETE:
+    :LEAD < :LEADT or :HARPI == 0 !This task is not necessary for short runs
+
+MAIN FRAME:
+    ecgate
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists complete this task, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+HOST=ecgate
+
+source ~/.profile
+source ~/.kshrc
+
+%include <qsub2.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+user=%USER%
+leadtime=%LEAD%
+
+set +e
+module load R/3.6.3
+module load proj4/5.2.0
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+
+year=`echo "$date" | awk '{print substr($1,1,4)}'`
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+day=`echo "$date" | awk '{print substr($1,7,2)}'`
+
+ecflow_client --label=info "Start harp io"
+
+/usr/local/apps/R/3.6.3/bin/Rscript /home/ms/at/${user}/HARP/examples/scripts/extract_grb_claef.R ${run} ${leadtime} > /home/ms/at/${user}/HARP/examples/scripts/HARPIO_%ECF_TRYNO%.log 2>&1
+
+cd /scratch/ms/at/${user}/CLAEF/HARP/sqlite_oper/CLAEF/${year}/${month}
+
+ecflow_client --label=info "Start tarzip"
+rm -f ${year}_${month}.tar.gz
+tar czvf ${year}_${month}.tar.gz FCTABLE*${year}${month}_${run}.sqlite
+
+ecflow_client --label=info "${year}_${month}.tar.gz"
+
+(( CHECKTRANS = 0 ))
+(( CHECKTRANSOK = 0 ))
+while (( ${CHECKTRANS} < 20 ))
+do
+
+   ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${year}_${month}.tar.gz -target /HARP/CLAEF/${year}_${month}.tar.gz -overwrite -verbose -mailto clemens.wastl@zamg.ac.at -onfailure
+
+   CODEREP=$?
+   if (( ${CODEREP} !=0 ))
+   then
+
+      ecflow_client --label=info "Copying ${year}_${month}.tar.gz failed, ${CHECKTRANS}"
+      (( CHECKTRANS = ${CHECKTRANS} + 1 ))
+      sleep 60
+
+   else
+
+      (( CHECKTRANS = 30 ))
+      OKFILE=CLAEF.ok
+      echo ${date}${run} > ${OKFILE}
+      sleep 10
+       
+      while (( ${CHECKTRANSOK} < 20 ))
+      do
+
+         ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${OKFILE} -target /HARP/CLAEF/${OKFILE} -overwrite -verbose -mailto clemens.wastl@zamg.ac.at -onfailure
+
+         sleep 10
+
+         #just for security because of problems with file system at ZAMG
+         ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${OKFILE} -target /HARP/CLAEF/${OKFILE} -overwrite -verbose -mailto clemens.wastl@zamg.ac.at -onfailure
+
+         sleep 10
+         CODEREP2=$?
+         if (( ${CODEREP2} !=0 ))
+         then
+
+            ecflow_client --label=info "Copying ${OKFILE} failed, ${CHECKTRANSOK}"
+            (( CHECKTRANSOK = ${CHECKTRANSOK} + 1 ))
+            sleep 60
+
+         else
+
+            (( CHECKTRANSOK = 30 ))
+
+         fi
+
+      done
+
+   fi
+
+done
+
+if (( ${CHECKTRANS} == 20 || ${CHECKTRANSOK} == 20 ))
+then
+
+    ecflow_client --label=error "Copying failed, exit"
+    exit 90
+
+else
+
+    ecflow_client --label=info "Copying successful"
+    rm -f ${year}_${month}.tar.gz
+    rm -f ${OKFILE}
+      
+fi
+
+%include <tail.h>

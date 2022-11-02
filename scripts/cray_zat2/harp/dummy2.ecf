@@ -1,0 +1,49 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/dummy/check_main/dummy2
+
+
+DESCRIPTION:
+    This is a dummy task which is only launched if important parts of the suite are delayed or went wrong. This task runs at specific times, but it is usually
+    set complete by the families lbc, obs and main.
+
+SOURCE:
+    '~zat2/ecf/scripts/dummy2.ecf'
+
+TRIGGER:
+    for [HH] == 00:
+       runs at 02:30 or complete when claef/runs/RUN_[HH]/lbc == complete or claef/runs/RUN_[HH]/obs == complete
+       runs at 05:15 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 06:
+       runs at 08:30 or complete when claef/runs/RUN_[HH]/lbc == complete or claef/runs/RUN_[HH]/obs == complete
+       runs at 11:15 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 12:
+       runs at 14:30 or complete when claef/runs/RUN_[HH]/lbc == complete or claef/runs/RUN_[HH]/obs == complete
+       runs at 17:15 or complete when claef/runs/RUN_[HH]/main == complete
+    for [HH] == 18:
+       runs at 20:30 or complete when claef/runs/RUN_[HH]/lbc == complete or claef/runs/RUN_[HH]/obs == complete
+       runs at 23:15 or complete when claef/runs/RUN_[HH]/main == complete 
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+     - Nothing to be done
+%end
+
+%include <qsub2.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+echo "Something went wrong with C-LAEF ${run}"
+ecflow_client --label=error "Something went wrong with C-LAEF ${run}"
+
+echo "Please check harpio suite under user zat2 at ECMWF" | mailx -s "WARNING: HARP Extraction of CLAEF obviously failed at ECMWF ... Please check" F.Weidle@zamg.ac.at
+
+exit 0
+%include <tail.h>

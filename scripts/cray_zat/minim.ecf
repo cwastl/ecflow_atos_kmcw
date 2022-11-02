@@ -1,0 +1,298 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/minim
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task does optimal interpolation for 3DVAR
+
+SOURCE:
+    '~zat/CLAEF/scripts/minim.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/screen == complete
+
+COMPLETE:
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task == complete (run without 3DVAR)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+enjk=%ENSJK%
+files=%STHOST%
+user=%USER%
+assimm=%ASSIMM%
+
+############################Run setup script for environment##############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user $files
+##########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+prgenvswitchto intel
+module swap intel/18.0.0.033
+module load python3
+
+INFLATION=.FALSE.       # ECMWF EDA spread will be increased by an inflation factor
+LHYDRO3D=.TRUE.
+
+[[ ! -d ${MINIMDIR} ]] && mkdir -p ${MINIMDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${MINIMDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+assimili=.TRUE.
+#this is to avoid 3DVAR for some random members
+adate2=$(echo $date | cut -c5-8)
+adate2=$(echo $adate2 | sed 's/^0*//') #remove leading zero if necessary
+adate3=$adate2$run
+(( adate4 = $adate3 * ($run+1) ))
+ii=0
+while (( $ii < $assimm )); do
+   AT=$(python3 -c "import random; random.seed($adate4); zufall=random.sample(range(1,17),$assimm); print(str(zufall[$ii]).zfill(2))")
+   if [[ $AT == *$mem* ]]
+   then
+      ecflow_client --label=info "No 3DVAR for this member"
+      assimili=.FALSE.
+   fi
+   (( ii = $ii + 1 ))
+done
+
+if [ $assimili == ".TRUE." ]
+then
+
+   # Environmental settings 
+   export NPROC=$EC_total_tasks
+   export NPROMA=-`expr $NPROC \/ 2`
+   export NPOOLS=$NPROC
+   export NPRGPEW=1
+   export NPRGPNS=$NPROC
+   export NPRTRV=$NPRGPEW
+   export NPRTRW=$NPRGPNS
+   export NSTRIN=`expr $NPROC \/ 2`
+   export NSTROUT=`expr $NPROC \/ 2`
+
+   export OMP_NUM_THREADS=1
+   export MALLOC_CHECK_=0   
+   #export MALLOC_CHECK_=3   
+   #export CNF_DEBUG=1
+   #export TO_ODB_DEBUG=1
+   #export F_RECLUNIT=BYTE
+   REDNMC=0.5
+   NITER=66 
+   NSIMU=69
+
+   # Some environment variables (ODB, DR. HOOK, GRIBTABLES)
+   export ECMWF_LOCAL_TABLE_PATH=$GRIBTABLES
+   export LOCAL_DEFINITION_TEMPLATES=$GRIBTEMPLATES
+   export DR_HOOK=0
+   export DR_HOOK_SILENT=0
+   export DR_HOOK_IGNORE_SIGNALS=-1
+   export EC_PROFILE_HEAP=0
+   export ODB_SRCPATH_CCMA=$RUNDIR/CCMA
+   export ODB_DATAPATH_CCMA=$RUNDIR/CCMA
+   export IOASSIGN=$RUNDIR/IOASSIGN
+   export ODB_CMA=CCMA
+   export ODB_ANALYSIS_DATE=$date
+   export ODB_ANALYSIS_TIME=${run}0000
+   export TIME_INIT_YYYYMMDD=$date
+   export TIME_INIT_HHMMSS=${run}0000
+   export ODB_STATIC_LINKING=1
+   export TO_ODB_ECMWF=0
+   export RTTOV_COEFDIR=${RUNDIR}
+
+   #Jk parameters perturbations
+   typeset -i seed seed1 aa
+   adate3=$(($adate3 + ${mem}))
+   seed=${mem}*$adate3
+
+   if [[ ${mem} == "00" ]]; then
+     AT=0.70
+     AV=0.80
+     AD=0.10
+     AQ=0.04
+     AP=0.00
+   else
+     aa=$adate3*1
+     seed1=$(($seed + $aa))
+     AT=$(python3 -c "import random; random.seed($seed1); br=random.randint(2,11)/10.;print(br)")
+
+     aa=$adate3*2
+     seed1=$(($seed + $aa))
+     AV=$(python3 -c "import random; random.seed($seed1); br=random.randint(3,13)/10.;print(br)")
+
+     aa=$adate3*3
+     seed1=$(($seed + $aa))
+     AD=$(python3 -c "import random; random.seed($seed1); br=random.randint(7,15)/100.;print(br)")
+
+     aa=$adate3*4
+     seed1=$(($seed + $aa))
+     AQ=$(python3 -c "import random; random.seed($seed1); br=random.randint(0,7)/100.;print(br)")
+
+     aa=$adate3*5
+     seed1=$(($seed + $aa))
+     AP=$(python3 -c "import random; random.seed($seed1); br=random.randint(0,2)/2.;print(br)")
+   fi
+
+   # Jk namelist parameters
+   if [[ $enjk -eq 1 ]]; then
+      LEJK=.TRUE.          # main Jk switch
+   else
+      LEJK=.FALSE.
+   fi
+
+   if [[ ${mem} == "00" ]]; then
+      LEJK=.FALSE.
+   fi
+
+   LSPRT=.FALSE.
+   QLGP=.TRUE. 
+   QLSP=.FALSE.
+
+   NSMAXJK=215          # integer truncation of the low res. LAM geometry
+   ALPHAKT=$AT          # amplification factor for Jk temperture term
+   ALPHAKVOR=$AV        # amplification factor for Jk vorticity term
+   ALPHAKDIV=$AD        # amplification factor for Jk divergence term
+   ALPHAKQ=$AQ          # amplification factor for Jk humidity term
+   ALPHAKP=0.0          # amplification factor for Jk pressure term
+   PRESINFJK=100500.0   # Jk activated above pressure level
+   PRESUPJK=98000.0     # Jk fully active above pressure level
+   NTRUNCJK=8           # wave number after which Jk will have no impact
+
+   # Fetching of the input files
+   cp $CLIMDIR/table? .
+
+   cp ${CLIMDIR}/const_cy43t2.tar.gz .
+   tar -xzvf const_cy43t2.tar.gz
+
+   ln -s scat.cmod5.table fort.36
+
+   # Get VARBC file from SCREENING, ODB file from CCMA and first guess
+   cp ${SCREENDIR}/VARBC.cycle ./VARBC.cycle
+   cp ${ADDSURFRESULTFILE} ./ICMSHMINIIMIN
+   cp ${SCREENDIR}/CCMA.tar CCMA.tar
+
+   tar -xvf CCMA.tar
+
+   cp $NAMELIASICHAN $RUNDIR/iasichannels
+   cp CCMA/IOASSIGN IOASSIGN
+
+   # Get B-MATRIX and V-MATRIX files
+   cp $BMATRIXFILE1 ./stabal96.bal
+   cp $BMATRIXFILE2 ./stabal96.cv
+   cp $BMATRIXFILE3 ./stabal96.cvt
+
+   cp ICMSHMINIIMIN ICMSHMINIINIT
+   cp ICMSHMINIIMIN ICMRFMINI0000
+
+   if [[ $LEJK == ".TRUE." ]]; then
+
+     cp $VMATRIXFILE  ./nonsep93_jk.cvt
+     cp ${SSTEXANAFILE} ./ICMJKMINIINIT 
+
+     # ECMWF perturbations inflation
+     if [[ $INFLATION == ".TRUE." ]]; then
+       ecflow_client --label=info "Perturbation inflation"
+       cp ${C927DIR}/ELSCFAROMALBC000 00-ICMJKMINIINIT 
+       export DR_HOOK_NOT_MPI="yes"
+       cp ${BINDIR}/inflating_new.py .
+       python3 inflating_new.py
+       ${BINDIR}/fa_copy -w prefix=S,suffix=TEMPERATURE -f fossil_dyna ICMJKMINIINIT
+       ${BINDIR}/fa_copy -w prefix=S,suffix=WIND.U.PHYS -f fossil_dyna ICMJKMINIINIT
+       ${BINDIR}/fa_copy -w prefix=S,suffix=WIND.V.PHYS -f fossil_dyna ICMJKMINIINIT
+       ${BINDIR}/fa_copy -w prefix=S,suffix=HUMI.SPECIFI -f fossil_dyna ICMJKMINIINIT
+       rm -rf fossil_dyna
+     fi
+  
+   fi
+
+   rm -rf fort.4
+   
+   # Fill namelist template -> fort.4
+   sed -e "s/{NBPROC}/${NPROC}/" \
+       -e "s/{NPRTRV}/${NPRTRV}/" \
+       -e "s/{NPRTRW}/${NPRTRW}/" \
+       -e "s/{NSTRIN}/${NSTRIN}/" \
+       -e "s/{NSTROUT}/${NSTROUT}/" \
+       -e "s/{NPROMA}/${NPROMA}/" \
+       -e "s/{NPRGPEW}/${NPRGPEW}/" \
+       -e "s/{NPRGPNS}/${NPRGPNS}/" \
+       -e "s/{niter}/${NITER}/" \
+       -e "s/{nsimu}/${NSIMU}/" \
+       -e "s/{LEJK}/${LEJK}/" \
+       -e "s/{LSPRT}/${LSPRT}/" \
+       -e "s/{qlsp}/${QLSP}/" \
+       -e "s/{qlgp}/${QLGP}/" \
+       -e "s/{rednmc}/${REDNMC}/" \
+       -e "s/{NSMAXJK}/${NSMAXJK}/" \
+       -e "s/{ALPHAKT}/${ALPHAKT}/" \
+       -e "s/{ALPHAKVOR}/${ALPHAKVOR}/" \
+       -e "s/{ALPHAKDIV}/${ALPHAKDIV}/" \
+       -e "s/{ALPHAKQ}/${ALPHAKQ}/" \
+       -e "s/{ALPHAKP}/${ALPHAKP}/" \
+       -e "s/{PRESINFJK}/${PRESINFJK}/" \
+       -e "s/{PRESUPJK}/${PRESUPJK}/" \
+       -e "s/{NTRUNCJK}/${NTRUNCJK}/" ${NAMELMINIM} > fort.4
+
+   # Run minimization config 131
+   ecflow_client --label=info "Run Minimization"
+   /usr/bin/time -v aprun -n $NPROC ${BINMASTER} > ${LOGDIR}/MINIMIZATION_%ECF_TRYNO%_${mem}.log 2>&1
+
+   # Distribute output (logfiles,nodefiles, ODB output FA output, VARBC output)
+   cp VARBC.cycle ${VARBCFILE}${run}_${mem}
+   mv VARBC.cycle ${MINIMDIR}
+
+   tar cvf CCMA_minim.tar CCMA*
+   mv CCMA_minim.tar ${MINIMDIR}/CCMA_minim.tar
+   cp MXMINI999+0000 ${MINIMDIR}/MXMINI999+0000
+
+   # BLEND hydrometeors with first guess file
+   export DR_HOOK_NOT_MPI="yes"
+   if [[ $LHYDRO3D == ".TRUE." ]]
+   then
+     ecflow_client --label=info "Blend hydrometeors"
+    # Add other 3D fields
+     cp MXMINI999+0000 AldsurfA
+     cp ${ADDSURFRESULTFILE} AldsurfB
+     cp AldsurfA AldsurfC
+     cp $NAMELBLEND fort.4
+
+     /usr/bin/time -v aprun -n 1 $BLENDBIN > ${LOGDIR}/BLEND_%ECF_TRYNO%_${mem}.log 2>&1
+
+     mv AldsurfC ${MINIMRESULTFILE}
+   fi
+
+   cp NODE.001_01 ${LOGDIR}/NODE_MINIMIZATION_${date}${run}_%ECF_TRYNO%_${mem}
+
+fi
+
+cd ${MINIMDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

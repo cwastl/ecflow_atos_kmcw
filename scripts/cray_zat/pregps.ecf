@@ -1,0 +1,140 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/obs/pregps
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task prepares GPS data for C-LAEF
+
+SOURCE:
+    '~zat/CLAEF/scripts/pregps.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs == complete
+
+COMPLETE:
+    :ASSIM == 0     !run C-LAEF without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set this task complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+files=%STHOST%
+user=%USER%
+
+set +e
+
+#######################Run setup script for environment##############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 999 $user $files
+#####################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${PREGPSDIR} ]] && mkdir -p ${PREGPSDIR}
+[[ ! -d ${LOGDIRBATOR} ]] && mkdir -p ${LOGDIRBATOR}
+
+# Create working directory
+RUNDIR=${PREGPSDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -rf $RUNDIR/*
+
+export OMP_NUM_THREADS=1
+export MALLOC_CHECK_=0
+#export MALLOC_CHECK_=3
+export DR_HOOK=0                  # Dr. Hook is for the traceback errors, but it's now disabled
+export DR_HOOK_NOT_MPI="yes"      # had to be added - crashing otherwise (calling to MPI). Maybe because sst_exc. is single task (non-MPI) job?
+export DR_HOOK_SILENT=0           # prints out error messages but doesn't terminate the job
+export DR_HOOK_IGNORE_SIGNALS=-1  # ignores all possible signals
+
+export MODEL_GPSSOL='AROME'
+
+# Get input data (ELSC*, namelist, binary, etc.)
+cp ${NAMELPREGPS} ./fort.4
+
+status=99
+if [ -s ${GPSOBSFILE} ] ; then
+  ecflow_client --label=info "GPSOBSFILE there"
+  cp ${GPSOBSFILE} ./OBSOUL.conv
+  cp ${LIST_GPS} ./list_gpssol
+  chmod 777 OBSOUL.conv list_gpssol
+  status=0
+  ${PREGPSBIN} > ${LOGDIRBATOR}/PREGPSSOL_%ECF_TRYNO%.log 2>&1
+  mv OBSOUL.gpssol ${PREGPSDIR}
+  status=$?
+  if (( $status != 0 ))
+  then
+      ecflow_client --label=error "GPSOBSFILE failed"
+  fi
+elif [ -s ${GPSOBSFILE1} ] ; then
+  ecflow_client --label=info "GPSOBSFILE1 there"
+  cp ${GPSOBSFILE1} ./OBSOUL.conv
+  cp ${LIST_GPS} ./list_gpssol
+  chmod 777 OBSOUL.conv list_gpssol
+  status=0
+  ${PREGPSBIN} > ${LOGDIRBATOR}/PREGPSSOL_%ECF_TRYNO%.log 2>&1
+  mv OBSOUL.gpssol ${PREGPSDIR}
+  status=$?
+  if (( $status != 0 ))
+  then
+      ecflow_client --label=error "GPSOBSFILE1 failed"
+  fi
+elif [ -s ${GPSOBSFILE11} ] ; then
+  ecflow_client --label=info "GPSOBSFILE11 there"
+  cp ${GPSOBSFILE11} ./OBSOUL.conv
+  cp ${LIST_GPS} ./list_gpssol
+  chmod 777 OBSOUL.conv list_gpssol
+  status=0
+  ${PREGPSBIN} > ${LOGDIRBATOR}/PREGPSSOL_%ECF_TRYNO%.log 2>&1
+  mv OBSOUL.gpssol ${PREGPSDIR}
+  status=$?
+  if (( $status != 0 ))
+  then
+      ecflow_client --label=error "GPSOBSFILE11 failed"
+  fi
+fi
+
+status2=99
+if [ -s ${GPSOBSFILE2} ] ; then
+  ecflow_client --label=info "GPSOBSFILE2 there"
+  cp ${GPSOBSFILE2} ./OBSOUL.conv
+  cp ${LIST_GPS} ./list_gpssol
+  chmod 777 OBSOUL.conv list_gpssol
+  status2=0
+  ${PREGPSBIN} > ${LOGDIRBATOR}/PREGPSSOL2_%ECF_TRYNO%.log 2>&1
+  mv OBSOUL.gpssol ${PREGPSDIR}/OBSOUL2.gpssol
+  status2=$?
+  if (( $status2 != 0 ))
+  then
+      ecflow_client --label=error "GPSOBSFILE2 failed"
+  fi
+fi
+
+if (( $status != 0 )) && (( $status2 != 0 ))
+then
+    ecflow_client --label=error "PREGPS failed"
+fi
+
+cd ${PREGPSDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

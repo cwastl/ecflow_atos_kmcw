@@ -1,0 +1,130 @@
+# Script to run PROGRID
+
+%include <pbs.h>
+%include <head.h>
+
+module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+step15=%STEPS15%
+assimc=%ASSIMC%
+user=%USER%
+
+################Run setup script for environment#####################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem 999 $assimc $user
+#####################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${PROGRIDDIR} ]] && mkdir -p ${PROGRIDDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${PROGRIDDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+C001File=$(cat ${C001DIR}/jobinfo.txt)
+
+NSLOTS=$EC_total_tasks
+
+# MPI, openMP env, etc.
+
+export MPI_IB_RAILS=1
+export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_VERBOSE=1
+export MPI_VERBOSE=1
+export MPI_BUFS_PER_PROC=256
+export MPI_BUFS_PER_HOST=2048
+export MPI_BUFFER_MAX=2000000
+
+export OMP_NUM_THREADS=1
+export KMP_STACKSIZE=500m
+export KMP_MONITOR_STACKSIZE=500m
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+export TSTEP=60
+
+if [ ${leadtime} -gt ${assimc} ]; then
+  step=0
+  while (( $step <= ${leadtime} )) ; do
+  
+    cstep=$(printf "%%04d" $step)
+
+    if [[ ${step15} == 1 && ${step} < ${leadtime} ]]
+    then
+
+      my_min="00 15 30 45"
+
+    else
+
+      my_min="00"
+
+    fi
+
+    for min in ${my_min[*]}
+    do
+      if [ ${min} == "00" ]; then
+        if [ ${mem} == "00" ]; then
+          FPOSOUTS=${FPOSOUTSIZECTL}
+        else
+          FPOSOUTS=${FPOSOUTSIZE}
+        fi
+      else
+        FPOSOUTS=${FPOSOUTSIZE15}
+      fi
+      INFILE=${C001DIR}/${C001File}/PF${EXP}${EXP}+${cstep}:${min}
+      (( WAITCOUNT = 0 ))
+      while [[ ${WAITCOUNT} -le 60 ]]
+      do
+        if [ -s ${INFILE} ] && [ $(/usr/bin/stat --printf="%%s" ${INFILE}) == ${FPOSOUTS} ] ; then
+          ln -sf ${INFILE} fort.11
+          status=0
+          ecflow_client --label=info "Prepare CLAEF${mem}+${cstep}:${min}.grb"
+          /usr/bin/time -v mpiexec -n ${NSLOTS} ${PROGRIDBIN} > ${LOGDIR}/PROGRID_${cstep}_${mem}.log 2>&1
+          status=$?
+          rename GRIDBIZARRE ${PROGRIDDIR}/CLAEF${mem}+${cstep}:${min}".grb" GRIDBIZARRE
+          rm -f fort.11
+          (( WAITCOUNT = 100 ))
+          ecflow_client --event=f
+        else
+          (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+          ecflow_client --label=info "PF${EXP}${EXP}+${cstep}:${min} does not yet exist, wait!"
+          sleep 60
+        fi
+      done 
+
+      if [[ ${WAITCOUNT} -eq 61 ]] 
+      then
+         
+         ecflow_client --label=error "PF${EXP}${EXP}+${cstep}:${min} does still not exist, exit!"
+         exit 20
+   
+      fi
+    done
+
+    (( step=${step}+1 ))
+
+  done
+else
+  ecflow_client --event=f
+fi
+
+cd ${PROGRIDDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

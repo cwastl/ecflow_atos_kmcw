@@ -1,0 +1,42 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/gettrig
+
+    [HH]=00,12
+
+DESCRIPTION:
+    This task copies trigger files from ZAMG
+
+SOURCE:
+    '~zat2/ecf/scripts_wasarchiv/gettrig.ecf'
+
+TRIGGER:
+    time dependency (09:00, 21:00)
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+set +e
+
+date=%DATUM%
+run=%LAUF%
+files=%STHOST%
+user=zat
+
+fectrans=claef_archiv
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+ecflow_client --label=info "Get trigger file"
+
+cd /${files}/tcwork/zat2/lb/CLAEF/ARCHIV
+
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source archiv.txt -remove -overwrite -verbose
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source trigger.txt -remove -overwrite -verbose
+
+%include <tail.h>

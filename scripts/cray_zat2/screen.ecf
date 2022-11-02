@@ -1,0 +1,226 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/screen
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task makes quality check for atmospheric observations
+
+SOURCE:
+    '~zat2/ecf/scripts/screen.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/varbccomb == complete and claef/runs/RUN_[HH]/obs/bator3D == complete
+
+COMPLETE:
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task == complete and set claef/RUN_[HH]/main/MEM_[MM]/minim == complete (run without 3DVAR)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+eda=%EDA%
+files=%STHOST%
+user=%USER%
+
+###########################Run setup script for environment###############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user $files
+##########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+prgenvswitchto intel
+module swap intel/18.0.0.033
+
+[[ ! -d ${SCREENDIR} ]] && mkdir -p ${SCREENDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+# Create working directory
+RUNDIR=${SCREENDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+ODB_DATAPATH_CCMA=${RUNDIR}/CCMA
+ODB_SRCPATH_RSTBIAS=${RUNDIR}/RSTBIAS
+ODB_DATAPATH_RSTBIAS=$ODB_SRCPATH_RSTBIAS
+
+# Obs perturabtion
+xx=$(echo ${mem} | cut -c 1)
+if [ $xx -eq 0 ]
+then
+  member=$(echo ${mem} | cut -c 2)
+else
+  member=${mem}
+fi
+
+if [ ${eda} -eq 1 ]
+then
+   if [[ ${mem} == "00" ]]
+   then
+     export LPERTURB=.FALSE. #obs perturbations
+     export NAEMEMBER=0      #needed for obs perturbation
+   else
+     export LPERTURB=.TRUE.
+     export NAEMEMBER=$member
+   fi
+else
+   export LPERTURB=.FALSE. #obs perturbations
+   export NAEMEMBER=0      #needed for obs perturbation
+fi
+
+# Environment settings
+export NPROC=$EC_total_tasks
+export NPROMA=-`expr $NPROC \/ 2`
+export NPRGPEW=1
+export NPRGPNS=$NPROC
+export NPRTRV=$NPRGPEW
+export NPRTRW=$NPRGPNS
+export NSTRIN=-`expr $NPROC \/ 2`
+export NSTROUT=-`expr $NPROC \/ 2`
+
+#export MALLOC_CHECK_=3
+export MALLOC_CHECK_=0
+export OMP_NUM_THREADS=1
+#export F_RECLUNIT=byte
+#export TO_PRESCREEN_DEBUG=1
+LSPRT=.TRUE.
+QLGP=.TRUE.   #humidity GP in input
+QLSP=.FALSE.    #humidity SP in input
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=0
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+export TO_ODB_DEBUG=1
+export ODB_IO_METHOD=1
+export ODB_STATIC_LINKING=1
+export ODB_CATCH_SIGNALS=1
+export ODB_CTX_DEBUG=1
+
+# ODB general settings
+export ECMWF_LOCAL_TABLE_PATH=$GRIBTABLES
+export LOCAL_DEFINITION_TEMPLATES=$GRIBTEMPLATES
+export EC_PROFILE_HEAP=0
+export ODB_SRCPATH_ECMA=$RUNDIR/ECMA
+export ODB_DATAPATH_ECMA=$RUNDIR/ECMA
+export IOASSIGN=$RUNDIR/IOASSIGN
+export ODB_ANALYSIS_DATE=$date
+export ODB_ANALYSIS_TIME=${run}0000
+export TIME_INIT_YYYYMMDD=$date
+export TIME_INIT_HHMMSS=${run}0000
+export RTTOV_COEFDIR=${RUNDIR}
+
+# ODB environment
+export ODB_SRCPATH_CCMA=${RUNDIR}/CCMA
+export ODB_DATAPATH_CCMA=${RUNDIR}/CCMA
+export SWAPP_ODB_IOASSIGN=${RUNDIR}/ioassign
+mkdir -p $ODB_DATAPATH_CCMA
+export ODB_FEBINPATH="."
+export ODB_STATIC_LINKING=1
+export ODB_CCMA_CREATE_POOLMASK=1
+export ODB_CCMA_POOLMASK_FILE=$ODB_DATAPATH_CCMA/CCMA.poolmask
+export ODB_MERGEODB_DIRECT=1
+export ODB_CCMA_CREATE_DIRECT=1
+export ODB_CCMA_TSLOTS=0
+export ODB_CCMA_LEFT_MARGIN=-90
+export ODB_CCMA_RIGHT_MARGIN=90
+export ODB_CMA=ECMA
+
+export ODB_SRCPATH_RSTBIAS=$RUNDIR/RSTBIAS
+export ODB_DATAPATH_RSTBIAS=$ODB_SRCPATH_RSTBIAS
+export ODB_SRCPATH_COUNTRYRSTRHBIAS=$RUNDIR/COUNTRYRSTRHBIAS
+export ODB_DATAPATH_COUNTRYRSTRHBIAS=$ODB_SRCPATH_COUNTRYRSTRHBIAS
+export ODB_SRCPATH_SONDETYPERSTRHBIAS=$RUNDIR/SONDETYPERSTRHBIAS
+export ODB_DATAPATH_SONDETYPERSTRHBIAS=$ODB_SRCPATH_SONDETYPERSTRHBIAS
+
+# Fetching of the input files
+cp ${IOASSIGNBIN} ./ioassign
+cp ${CIOASSIGNBIN} ./create_ioassign
+chmod 777 ./create_ioassign
+cp ioassign $ODB_DATAPATH_CCMA/IOASSIGN
+
+cp ${CLIMDIR}/const_cy43t2.tar.gz .
+tar -xzvf const_cy43t2.tar.gz
+ln -s scat.cmod5.table fort.36
+cp errgrib_scr errgrib
+
+cp ${VARBCFILE}${run}_${mem} ./VARBC.cycle
+cp ${ADDSURFRESULTFILE} ICMSHSCREINIT
+cp ${BATOR3DODBFILE} ./ECMA_merged.tar
+tar -xvf ECMA_merged.tar
+
+ecflow_client --label=info "Create IOASSIGN"
+./create_ioassign -lCCMA -n$NPROC > ${LOGDIR}/CREATE_IOASSIGN_%ECF_TRYNO%_${mem}.log 2>&1
+cp CCMA.IOASSIGN ./CCMA/CCMA.IOASSIGN
+ln -s CCMA.IOASSIGN ./CCMA/IOASSIGN.CCMA
+cp ./CCMA/CCMA.IOASSIGN ./CCMA/IOASSIGN
+IOASSIGN_CCMA=./CCMA/IOASSIGN.CCMA
+
+cp $IOASSIGN_CCMA $ODB_DATAPATH_CCMA/IOASSIGN
+cat $IOASSIGN_CCMA >> $ODB_SRCPATH_ECMA/IOASSIGN
+
+cp $NAMELIASICHAN $RUNDIR/iasichannels
+cp ECMA/IOASSIGN IOASSIGN
+
+export IOASSIGN=IOASSIGN
+
+sed -e "s/{NBPROC}/${NPROC}/" \
+    -e "s/{NPRTRV}/${NPRTRV}/" \
+    -e "s/{NPRTRW}/${NPRTRW}/" \
+    -e "s/{NSTRIN}/${NSTRIN}/" \
+    -e "s/{NSTROUT}/${NSTROUT}/" \
+    -e "s/{NPROMA}/${NPROMA}/" \
+    -e "s/{NPRGPEW}/${NPRGPEW}/" \
+    -e "s/{LSPRT}/${LSPRT}/" \
+    -e "s/{qlsp}/${QLSP}/" \
+    -e "s/{qlgp}/${QLGP}/" \
+    -e "s/{lperturb}/${LPERTURB}/" \
+    -e "s/{naemember}/${NAEMEMBER}/" \
+    -e "s/{NPRGPNS}/${NPRGPNS}/" $NAMELSCREEN > fort.4
+
+# Run screening config 002
+ecflow_client --label=info "Screening"
+/usr/bin/time -v aprun -n $NPROC ${BINMASTER} > ${LOGDIR}/SCREEN_%ECF_TRYNO%_${mem}.log 2>&1 
+
+if (( $? != 0 ))
+then
+  ecflow_client --label=error "Error screening"
+  exit 1
+fi
+
+# Distribute output (log files, NODE file, ODB file, VARBC file)
+mv VARBC.cycle ${SCREENDIR}/VARBC.cycle
+tar cvf ECMA_screen.tar ECMA*
+mv ECMA_screen.tar ${SCREENRESULTFILE}
+tar cvf CCMA.tar CCMA*
+mv CCMA.tar ${SCREENDIR}
+mv NODE.001_01 ${LOGDIR}/NODE_SCREEN_${date}${run}_%ECF_TRYNO%_${mem}
+
+cd ${SCREENDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

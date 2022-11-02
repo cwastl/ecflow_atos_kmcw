@@ -1,0 +1,68 @@
+#This is a task which task saves grib files from operational C-LAEF and Esuite to scratch for verification with MENT_verif_tool! 
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+user=%USER%
+leadtime=%LEADCTL%
+assimc=%ASSIMC%
+
+exper=("kmcw00" "zat" "zat2")
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date}"
+
+for exp in ${exper[*]}
+do
+
+   ecflow_client --label=info "Prepare data for ${exp}"
+
+   mkdir -p /scratch/ms/at/${user}/${exp}/${date}${run}/
+   cd /scratch/ms/at/${user}/${exp}/${date}${run}/
+
+   if [[ ${exp} == "kmcw00" ]]
+   then
+
+      cp /scratch/ms/at/${user}/ECF/DATA/${date}/${run}/MEM_00/ADDGRIB/CLAEF* .
+
+   elif [[ ${exp} == "zat" ]]
+   then
+    
+      cp /sc1/tcwork/zat/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/block_1/CLAEF* .   
+      cp /sc1/tcwork/zat/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/block_2/CLAEF* .   
+      cp /sc1/tcwork/zat/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/block_3/CLAEF* .   
+      cp /sc1/tcwork/zat/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/block_4/CLAEF* .   
+      cp /sc1/tcwork/zat/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/block_5/CLAEF* .   
+      
+   elif [[ ${exp} == "zat2" ]]
+   then
+
+      cp /sc1/tcwork/zat2/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/CLAEF* .
+
+   fi
+
+   mkdir neu
+
+   i=0
+   while (( ${i} <= ${leadtime} ))
+   do
+
+      ii=$(printf "%%02d" $i)
+      grib_copy -w typeOfLevel=surface -w param=176 CLAEF${mem}+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_1
+      grib_copy -w typeOfLevel=heightAboveGround -w level=2/10 CLAEF${mem}+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_2
+      cat neu/CLAEF00+00${ii}:00.grb_1 neu/CLAEF00+00${ii}:00.grb_2 > neu/CLAEF00+00${ii}:00.grb
+      rm -f neu/CLAEF00+00${ii}:00.grb_1 neu/CLAEF00+00${ii}:00.grb_2 CLAEF${mem}+00${ii}:00.grb
+      mv neu/CLAEF00+00${ii}:00.grb .
+
+      (( i=$i+1 ))
+
+   done
+
+   rm -rf neu
+
+done
+
+%include <tail.h>

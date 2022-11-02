@@ -1,0 +1,105 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/harp/verif
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This is a task which task saves grib files from operational C-LAEF and Esuite to scratch for verification with MENT_verif_tool! 
+
+SOURCE:
+    '~zat2/ecf/scripts/verif.ecf'
+
+TRIGGER:
+    :VERIF == 1 and ../main == complete
+
+COMPLETE:
+    :LEAD < :LEADT or :VERIF == 0 !This task is not necessary for short runs
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists complete this task, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+user=%USER%
+leadtime=%LEADCTL%
+
+#exper=("zat" "zat2" "kmcw00" "kmcw01" "kmcw02")
+#exper=("zat" "zat2" "kmcw00")
+exper=("kmcw00")
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date}"
+
+for exp in ${exper[*]}
+do
+
+   ecflow_client --label=info "Prepare data for ${exp}"
+
+   mkdir -p /sc1/tcwork/${user}/lb/CLAEF/VERIF/${exp}/${date}${run}/
+   cd /sc1/tcwork/${user}/lb/CLAEF/VERIF/${exp}/${date}${run}/
+
+   if [[ ${exp} == "kmcw00" ]]
+   then
+
+      cp /sc1/tcwork/zat2/lb/CLAEF/DATA/${date}/${run}/MEM_01/ADDGRIB/CLAEF*.grb .
+
+   elif [[ ${exp} == "kmcw01" ]]
+   then
+
+      cp /sc1/tcwork/zat2/lb/CLAEF/DATA/${date}/${run}/MEM_02/ADDGRIB/CLAEF*.grb .
+
+   elif [[ ${exp} == "kmcw02" ]]
+   then
+
+      cp /sc1/tcwork/zat2/lb/CLAEF/DATA/${date}/${run}/MEM_03/ADDGRIB/CLAEF*.grb .
+
+   elif [[ ${exp} == "kmcw03" ]]
+   then
+
+      cp /home/ms/at/kmcw/ECF/DATA/${date}/${run}/MEM_02/ADDGRIB/CLAEF*.grb .
+      
+   else
+
+      cp /sc1/tcwork/${exp}/lb/CLAEF/DATA/${date}/${run}/MEM_00/ADDGRIB/CLAEF*.grb .
+
+   fi
+
+   mkdir -p neu
+
+   i=0
+   while (( ${i} <= ${leadtime} ))
+   do
+
+      ii=$(printf "%%02d" $i)
+      grib_copy -w typeOfLevel=surface -w param=176 CLAEF??+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_1
+      grib_copy -w typeOfLevel=heightAboveGround -w level=2/10 CLAEF??+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_2
+      grib_copy -w typeOfLevel=surface -w param=61 CLAEF??+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_3
+      grib_copy -w typeOfLevel=surface -w param=223 CLAEF??+00${ii}:00.grb neu/CLAEF00+00${ii}:00.grb_4
+      cat neu/CLAEF00+00${ii}:00.grb_1 neu/CLAEF00+00${ii}:00.grb_2 neu/CLAEF00+00${ii}:00.grb_3 neu/CLAEF00+00${ii}:00.grb_4 > neu/CLAEF00+00${ii}:00.grb
+      rm -f neu/CLAEF00+00${ii}:00.grb_1 neu/CLAEF00+00${ii}:00.grb_2 neu/CLAEF00+00${ii}:00.grb_3 neu/CLAEF00+00${ii}:00.grb_4 CLAEF??+00${ii}:00.grb
+      mv neu/CLAEF00+00${ii}:00.grb .
+
+      (( i=$i+1 ))
+
+   done
+
+   rm -rf neu
+
+done
+
+%include <tail.h>

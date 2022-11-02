@@ -1,0 +1,54 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/cleaning
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task cleans the directories of the previous runs
+
+SOURCE:
+    '~zat2/ecf/scripts/cleaning.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/dummy/ez_trigger/dummy1 == complete
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+#run=LAUF
+#amem=NZMEMB
+files=%STHOST%
+user=%USER%
+
+#MY_DIR=/sc1/tcwork/zat2/lb/SUMO
+#deldir=$(date --date="2 days ago" "+%%Y%%m%%d")
+
+# report to ecflow
+#ecflow_client --label=run "The date is now ${date} ${run}"
+
+#ecflow_client --label=info "Cleaning ${files}"
+#i=0
+#while (( ${i} <= ${amem} - 1 )) ; do
+#
+#   ii=$(printf "%%02d" $i)
+#   if [ -d ${MY_DIR}/MEM_${ii}/${deldir} ] ; then
+#
+#      cd ${MY_DIR}/MEM_${ii}
+#      rm -rf ${deldir}/ 
+#   fi
+#   
+#   (( i=${i}+1 ))   
+#
+#done
+
+sleep 20
+
+%include <tail.h>

@@ -1,0 +1,201 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/copy
+
+    [HH]=00,12; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task copies files to be archived to scratch directory
+
+SOURCE:
+    '~zat2/ecf/scripts_wasarchiv/copy.ecf'
+
+TRIGGER:
+    time dependency (09:00, 21:00)
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+assimc=%ASSIMC%
+files=%STHOST%
+user=zat
+
+if [ -s /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/archiv.txt ]
+then
+
+   while IFS=" " read date run; do
+
+      checkf=$(els ec:ZAMG_ARCHIVE/2016_01/WASARCHIV/${date}/${run}/MEM_${mem})
+      if [ -z "$checkf" ]
+      then
+
+         if [[ ${run} == "00" ]]
+         then
+            leadtime=60
+         else
+            leadtime=48
+         fi
+
+         if [[ ${mem} == "00" ]]
+         then
+            leadtime=%LEADCTL%
+         fi
+
+         # report to ecflow
+         ecflow_client --label=run "The date is now ${date} ${run}"
+         ecflow_client --label=info "Archive $date $run"
+
+         ##################################Run setup script for environment##########################
+         . /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem $lagg $assimc $user $files
+         ############################################################################################
+
+         # Create working directory
+         RUNDIR=/${files}/tcwork/zat2/lb/CLAEF/ARCHIV/${date}/${run}/MEM_${mem}
+         [[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+         cd ${RUNDIR}
+
+         rm -rf ${RUNDIR}/*
+
+         # Create guess directory
+         [[ ! -d ${RUNDIR}/GUESS ]] && mkdir -p ${RUNDIR}/GUESS
+         cd ${RUNDIR}/GUESS
+
+         ecflow_client --label=info "Copying first guess"
+         try_guess=1
+         found=0
+         while (( $try_guess <= 12 )) && (( $found < 1 )) # loop through all possible guessfiles
+         do
+
+           ecflow_client --label=info "Try guess file ${try_guess}"
+           eval "actfile=\$GUESSFILE${try_guess}"
+
+           if [ -f  ${actfile} ]
+           then
+              if (( $? == 0 ))
+              then
+                 found=1
+                 cp $actfile .
+                 try_guess=20
+              fi
+            fi
+            let "try_guess = $try_guess+1"
+
+         done
+
+         try_guess=1
+         found=0
+         while (( $try_guess <= 12 )) && (( $found < 1 )) # loop through all possible guessfiles
+         do
+
+           ecflow_client --label=info "Try soilguess file ${try_guess}"
+           eval "actfile=\$SOILGUESSFILE${try_guess}"
+
+           if [ -f  ${actfile} ]
+           then
+              if (( $? == 0 ))
+              then
+                 found=1
+                 cp $actfile .
+                 try_guess=20
+              fi
+            fi
+            let "try_guess = $try_guess+1"
+
+         done
+
+         ecflow_client --label=info "Copying Canari"
+         # Create canari directory
+         [[ ! -d ${RUNDIR}/CANARI ]] && mkdir -p ${RUNDIR}/CANARI
+         cd ${RUNDIR}/CANARI
+
+         if [ -f ${CANARIANAFILESURF} ] ; then
+
+            cp ${CANARIANAFILESURF} .
+
+         fi
+
+         ecflow_client --label=info "Copying Minim"
+         # Create minim directory
+         [[ ! -d ${RUNDIR}/MINIMIZATION ]] && mkdir -p ${RUNDIR}/MINIMIZATION
+         cd ${RUNDIR}/MINIMIZATION
+
+         if [ -f ${MINIMRESULTFILE} ] ; then
+
+            cp ${MINIMRESULTFILE} .
+
+         fi
+
+         ecflow_client --label=info "Copying Pertsurf"
+         # Create pertsurf directory
+         [[ ! -d ${RUNDIR}/PERTSURF ]] && mkdir -p ${RUNDIR}/PERTSURF
+         cd ${RUNDIR}/PERTSURF
+
+         if [ -f ${PERTSURFRESULTFILE} ] ; then
+
+            cp ${PERTSURFRESULTFILE} .
+
+         fi
+
+         ecflow_client --label=info "Copying COUPL"
+         # Create coupl directory
+         [[ ! -d ${RUNDIR}/COUPL ]] && mkdir -p ${RUNDIR}/COUPL
+         cd ${RUNDIR}/COUPL
+
+         i=$lagg
+         (( leadtime=$leadtime+$lagg))
+         while (( $i <= $leadtime )) ; do
+
+            jj=$(printf "%%03d" $i)
+
+            if [[ ${mem} == "00" ]]
+            then
+
+               if [[ -f ${LBCIFS}/ffei${n1date}_${n1run}00+${jj} ]]
+               then
+
+                  cp ${LBCIFS}/ffei${n1date}_${n1run}00+${jj} .
+
+               fi
+
+            else
+
+               if [[ -f ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${jj}-${mem} ]]
+               then
+
+                  cp ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${jj}-${mem} .
+
+               fi
+
+            fi
+
+            (( i=$i+$couplfr ))
+
+         done
+  
+      else
+
+         ecflow_client --label=info "$date $run already archived"
+
+      fi
+
+   done < /sc1/tcwork/zat2/lb/CLAEF/ARCHIV/archiv.txt 
+
+   cd ${RUNDIR}
+
+else
+
+   ecflow_client --label=info "No archive for $date $run"
+ 
+fi
+
+%include <tail.h>

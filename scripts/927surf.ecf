@@ -1,0 +1,135 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/927surf
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task performs interpolation of ECMWF surface file to C-LAEF domain
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/927surf.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/dummy/ez_trigger/dummy1 == complete
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists, set task == complete.
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+%include <job_geometry.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+user=%USER%
+
+#################Run setup script for environment#######################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem $lagg 999 $user
+########################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${C927SURFDIR} ]] && mkdir -p ${C927SURFDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${C927SURFDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+ln -sf ${NAMEL927SURFEX} ${RUNDIR}/PRE_REAL1.nam
+
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+
+ln -s ${CLIMFILENAME_AROME}${month} ${RUNDIR}/const.clim.${EXP}
+
+ln -s ${CLIMFILENAME_ECMWF_DET}${month} ${RUNDIR}/Const.Clim
+NAMELSURF=${NAMEL927SURF}
+
+lpgdfwr=.FALSE.
+
+#---  modifiy namelist
+sed -e   "s/{nproma}/$NPROMA/"\
+    -e   "s/{EXPERIMENT}/$EXP/"\
+    -e   "s/{NPROC}/$NPROC/"\
+    -e   "s/{lpgdfwr}/${lpgdfwr}/g" ${NAMELSURF} > ${RUNDIR}/fort.4
+ 
+ln -s ${PGDFILE_FA} ${RUNDIR}/const.clim.sfx.${EXP}
+
+ln -s ${ECOCLIMAPI} ${RUNDIR}/ecoclimapI_covers_param.bin
+ln -s ${ECOCLIMAPII} ${RUNDIR}/ecoclimapII_eu_covers_param.bin
+
+cstep=$(printf "%%04d" $lagg)
+cstep2=$(printf "%%03d" $lagg)
+
+(( WAITCOUNT = 0 ))
+if [[ ${mem} == "00" ]]
+then
+   while [[ ${WAITCOUNT} -le 120 ]]
+   do
+      if [[ -f ${LBCIFS}/ffei${n1date}_${n1run}00+${cstep2} ]]
+      then
+         ln -s ${LBCIFS}/ffei${n1date}_${n1run}00+${cstep2} ICMSHFPOSINIT
+         (( WAITCOUNT = 300 ))
+      else
+         echo "ATTENTION: dissemination file does not yet exist!!!"
+         ecflow_client --label=info "ATTENTION: dissemination file does not yet exist!!!"
+         (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+         sleep 60
+      fi
+   done
+else
+   while [[ ${WAITCOUNT} -le 120 ]]
+   do
+      if [[ -f ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${cstep2}-${mem} ]]
+      then
+         ln -s ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${cstep2}-${mem} ICMSHFPOSINIT
+         (( WAITCOUNT = 300 ))
+      else
+         echo "ATTENTION: dissemination file does not yet exist!!!"
+         ecflow_client --label=info "ATTENTION: dissemination file does not yet exist!!!"
+         (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+         sleep 60
+      fi
+   done
+fi
+
+if [[ ${WAITCOUNT} -le 121 ]]
+then
+   echo "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+   ecflow_client --label=error "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+   exit 999
+fi
+
+ecflow_client --label=info "creating PFE927${EXP}+0000.sfx"
+# --- submit the job ---------------
+status=0
+srun ${BINMASTER} > ${LOGDIR}/927_Master_surf_%ECF_TRYNO%_${mem}.log 2>&1
+status=${?}
+# ----------------------------------
+
+rename NODE.001_01 ${LOGDIR}/NODE_927_000_${EXP}_%ECF_TRYNO%_${mem} NODE.001_01
+rename PFFPOSAROM+0000.sfx ${C927SURFDIR}/SURFEX_${EXP}_INIT.fa PFFPOSAROM+0000.sfx
+
+cd ${C927SURFDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>
+

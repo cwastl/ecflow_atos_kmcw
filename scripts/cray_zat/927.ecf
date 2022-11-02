@@ -1,0 +1,233 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/927
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task performs interpolation of LBC to C-LAEF domain
+
+SOURCE:
+    '~zat/CLAEF/scripts/927.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/dummy/ez_trigger/dummy1 == complete
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - Do not set this task complete!
+    - If failure persists, this is a severe error with 927
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+assim=%ASSIM%
+files=%STHOST%
+user=%USER%
+
+##############################Run setup script for environment##########################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem $lagg 999 $user $files
+########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+module load cray-snplauncher
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+NPROMA=-32
+NPROC=$EC_total_tasks
+NPRGPNS=$NPROC
+NPRGPEW=1
+NPRTRV=$NPRGPEW
+NPRTRW=$NPRGPNS
+NSTRIN=1
+NSTROUT=1
+
+NEINI=0
+
+addsurf=0
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+
+# MPI, openMP env, etc.
+
+export GRIB_SAMPLES_PATH=/usr/local/apps/grib_api/1.10.0/INTEL/140/ifs_samples/grib1
+export MPI_IB_RAILS=1
+export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_VERBOSE=1
+export MPI_VERBOSE=1
+export MPI_BUFS_PER_PROC=256
+export MPI_BUFS_PER_HOST=2048
+export MPI_BUFFER_MAX=2000000
+
+export OMP_NUM_THREADS=1
+export KMP_STACKSIZE=500m
+export KMP_MONITOR_STACKSIZE=500m
+export F_RECLUNIT=BYTE
+export F_UFMTENDIAN="big:10,33,50,54,81"
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+if [[ $OMP_NUM_THREADS = 1 ]] ; then
+  export XLSMPOPTS="parthds=1:stack=358400000 : spins=500000 : yields=50000"
+else
+  export XLSMPOPTS="parthds=$OMP_NUM_THREADS:stack=358400000"
+fi
+
+#--- Set up for 927
+# ---- Create working directory
+
+[[ ! -d ${C927DIR} ]] && mkdir -p ${C927DIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${C927DIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+export TSTEP=60
+ln -sf ${BINMASTER} MASTER
+
+# --- get necessary files
+
+ln -s ${CLIMFILENAME_AROME}${month} const.clim.AROM
+
+ln -s ${CLIMFILENAME_ECMWF_DET}${month} Const.Clim
+NAM=${NAMEL927}
+NAMADDS=${NAMEL927ADDS}
+
+ln -s ${ECOCLIMAPI} .
+ln -s ${ECOCLIMAPII} .
+
+i=$lagg
+k=0
+(( leadtime=$leadtime+$lagg))
+while (( $i <= $leadtime )) ; do
+
+  j=$(printf "%%04d" $i)
+
+  jj=$(printf "%%03d" $i)
+
+  l=$(printf "%%03d" $k)
+
+  ecflow_client --label=info "Creating ELSCFAROMALBC${l}"
+
+  if [[ $assim -eq 1 ]] && [[ $k -eq 0 ]] && [[ $addsurf -eq 0 ]] ; then
+  
+    #---  modifiy namelist
+    sed -e   "s/{nproma}/$NPROMA/"\
+        -e   "s/{EXPERIMENT}/$EXP/"\
+        -e   "s/{NPROC}/$NPROC/"\
+        -e   "s/{nstrin}/$NSTRIN/"\
+        -e   "s/{nstrout}/$NSTROUT/g" ${NAMADDS} > $RUNDIR/fort.4
+
+  else
+
+    #---  modifiy namelist
+    sed -e   "s/{nproma}/$NPROMA/"\
+        -e   "s/{EXPERIMENT}/$EXP/"\
+        -e   "s/{NPROC}/$NPROC/"\
+        -e   "s/{nstrin}/$NSTRIN/"\
+        -e   "s/{nstrout}/$NSTROUT/g" ${NAM} > $RUNDIR/fort.4
+
+  fi    
+
+  rm -f ICMSHE927INIT
+
+  (( WAITCOUNT = 0 ))
+  if [[ ${mem} == "00" ]]
+  then
+     while [[ ${WAITCOUNT} -le 120 ]]
+     do
+        if [[ -f ${LBCIFS}/ffei${n1date}_${n1run}00+${jj} ]]
+        then
+           ln -s ${LBCIFS}/ffei${n1date}_${n1run}00+${jj} ICMSHE927INIT
+           (( WAITCOUNT = 300 ))
+        else 
+           echo "ATTENTION: dissemination file does not yet exist!!!"
+           ecflow_client --label=info "ATTENTION: dissemination file does not yet exist!!!"
+           (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+           sleep 60
+        fi
+     done      
+  else
+     while [[ ${WAITCOUNT} -le 120 ]]
+     do
+        if [[ -f ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${jj}-${mem} ]]
+        then
+           ln -s ${LBCIFS_ENS}/ffee${n1date}_${n1run}00+${jj}-${mem} ICMSHE927INIT
+           (( WAITCOUNT = 300 ))
+        else
+           echo "ATTENTION: dissemination file does not yet exist!!!"
+           ecflow_client --label=info "ATTENTION: dissemination file does not yet exist!!!"
+           (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+           sleep 60
+        fi
+     done
+  fi
+
+  if [[ ${WAITCOUNT} -le 121 ]]
+  then
+     echo "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+     ecflow_client --label=error "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+     exit 999
+  fi
+
+  status=0
+  /usr/bin/time -v mpiexec -n $EC_total_tasks ./MASTER > ${LOGDIR}/927atm_master_%ECF_TRYNO%_${mem}.log 2>&1 
+  status=$?
+
+  if [[ $assim -eq 1 ]] && [[ $k -eq 0 ]] && [[ $addsurf -eq 0 ]]; then
+     
+     addsurf=1   
+     rename PFE927AROM+0000 ${C927DIR}/ADDSURFAROMALBC000 PFE927AROM+0000
+     rename NODE.001_01 ${LOGDIR}/NODE_ADDSURF_00${k}_%ECF_TRYNO%_${mem} NODE.001_01
+
+  else
+ 
+     rename PFE927AROM+0000 ${C927DIR}/ELSCFAROMALBC${l} PFE927AROM+0000
+     rename NODE.001_01 ${LOGDIR}/NODE_927_${l}_%ECF_TRYNO%_${mem} NODE.001_01
+
+     if [[ $assim -eq 1 ]] && [[ $k -eq 0 ]];then
+
+        ecflow_client --event=d
+
+     fi
+ 
+     (( i=$i+$couplfr ))
+     (( k=$k+1 ))
+
+  fi 
+
+  rm -f ncf* ifs*
+
+done
+
+cd ${C927DIR}
+
+%include <tail.h>
+

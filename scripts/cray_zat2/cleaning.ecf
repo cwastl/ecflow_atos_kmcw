@@ -1,0 +1,123 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/cleaning
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task cleans the directories of the previous runs
+
+SOURCE:
+    '~zat2/ecf/scripts/cleaning.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/dummy/ez_trigger/dummy1 == complete
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+amem=%ANZMEMB%
+assimc=%ASSIMC%
+files=%STHOST%
+user=%USER%
+
+###########################Run setup script for environment##############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 $assimc $user $files
+#########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+ecflow_client --label=info "Cleaning ${files}"
+if [ -d ${MY_DIR}/DATA/${p3date}/${p3run} ] ; then
+
+   ecflow_client --label=info "${p3date}/${p3run} exists"
+   cd ${MY_DIR}/DATA/${p3date}/${p3run}
+   rm -rf BATOR BATOR3D OBSERVATIONS PREGPSSOL
+
+   i=0
+   while (( ${i} <= ${amem} - 1 )) ; do
+
+      ii=$(printf "%%02d" $i)
+
+      if [ -d ${MY_DIR}/DATA/${p3date}/${p3run}/MEM_${ii} ] ; then
+
+         cd ${MY_DIR}/DATA/${p3date}/${p3run}/MEM_${ii}
+         rm -rf 927SURF VARBCCOMB ADDSURF SCREENING SSTEX
+      
+#         if [ -d ${MY_DIR}/DATA/${p3date}/${p3run}/MEM_${ii}/001 ] ; then
+# 
+#            cd ${MY_DIR}/DATA/${p3date}/${p3run}/MEM_${ii}/001
+#            find . -mindepth 1 ! -name "ICMSH*" | xargs rm -rf
+#        
+#         fi 
+
+      fi
+
+      (( i=${i}+1 ))   
+
+   done
+
+else
+
+   ecflow_client --label=info "${p3date}/${p3run} does not exist"
+
+fi
+
+
+[[ -d ${MY_DIR}/DATA/${p20date}/${p20run} ]] && rm -rf ${MY_DIR}/DATA/${p20date}/${p20run}
+
+if [ ${run} == "00" ]; then
+   if [ -d ${MY_DIR}/DATA/${psdate} ]; then
+      rm -rf ${MY_DIR}/DATA/${psdate}
+   fi
+fi
+
+ecflow_client --label=info "Cleaning Mirror"
+
+i=0
+while (( ${i} <= ${amem} - 1 )) ; do
+
+   ii=$(printf "%%02d" $i)
+      
+   if [ -d ${MIRRORFS}/DATA/${p3date}/${p3run}/MEM_${ii}/001 ] ; then
+ 
+      ecflow_client --label=info "${p3date}/${p3run}/MEM_${ii} exists"
+      cd ${MIRRORFS}/DATA/${p3date}/${p3run}/MEM_${ii}/001
+      find . -mindepth 1 ! -name "ICMSH*" | xargs rm -rf
+        
+   else 
+
+      ecflow_client --label=info "${p3date}/${p3run}/MEM_${ii} does not exist"
+
+   fi
+
+   (( i=${i}+1 ))   
+
+done
+
+[[ -d ${MIRRORFS}/DATA/${p20date}/${p20run} ]] && rm -rf ${MIRRORFS}/DATA/${p20date}/${p20run}
+
+if [ ${run} == "00" ]; then
+   if [ -d ${MIRRORFS}/DATA/${psdate} ]; then
+      rm -rf ${MIRRORFS}/DATA/${psdate}
+   fi
+fi
+
+%include <tail.h>

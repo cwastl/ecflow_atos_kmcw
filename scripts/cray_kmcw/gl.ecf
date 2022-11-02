@@ -1,0 +1,103 @@
+# Script to run GL tool to prepare ECMWF couplingfiles for 927
+
+%include <pbs.h>
+%include <head.h>
+
+module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+
+#####################Run setup script for environment##############
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg 999 $user
+###################################################################
+
+# Include auxlibs in LD_LIBRARY_PATH because we use dynamic libs
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/ms/fr/rme/opt/INTEL/auxlibs/lib/
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEAD%
+else
+   leadtime=%LEADCTL%
+fi
+
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+
+[[ ! -d ${COUPLDIR} ]] && mkdir -p ${COUPLDIR}
+
+RUNDIR=${COUPLDIR}/$PBS_JOBID
+[[ ! -d $RUNDIR ]] && mkdir -p $RUNDIR
+cd $RUNDIR
+rm -rf $RUNDIR/*
+
+export MALLOC_CHECK_=0
+export DR_HOOK=0                 #turn off dr_hook
+export DR_HOOK_SILENT=0          #write to log-file if some signal was ignored
+export DR_HOOK_IGNORE_SIGNALS=-1 #ignore all signals
+
+LQGP=FALSE    #if true, humidity is gridpoint in output
+NHYD=TRUE    #if true, nonhydrostatic fields will be produced in output
+
+# ECMWF files and AROME climate file
+cp ${LBCDIR_GL}/ECMWF_$mem.grb .
+ln -sf ${CLIMFILENAME_ECMWF_LAE}${month} ./climate_aladin
+# Extract z, ci and sst
+grib_copy -w shortName=z/ci/sst ECMWF_$mem.grb CONST.grb
+
+let "anzahl = (${leadtime})/${couplfr}"
+
+i=0
+while [ $i -le $anzahl ]
+do
+
+    (( j = ${i}*${couplfr}+${lagg} ))
+    jj=$(printf "%%02d" $j)
+
+    if [ ! -s ${COUPLDIR}/ICMSHBC${mem}+00${jj} ]
+    then
+   
+       ecflow_client --label=info "Run GL for ICMSHBC${mem}+00${jj}"
+       grib_copy -w stepRange=$j ECMWF_$mem.grb ECMWF_${mem}_small.grb
+
+       # Handling of the surface fields
+       if [[ ${jj} == 00 ]]; then
+          SKIP_SURF=F
+          LQGP=FALSE   #because of Jk. But for 06/18 runs, q will still be gp. Conversion in minim. is neccessary
+       else
+          SKIP_SURF=F
+          cat CONST.grb >> ECMWF_${mem}_small.grb
+          LQGP=FALSE
+       fi
+
+       # Namelist settings
+       sed -e "s/{lqgp}/$LQGP/" \
+           -e "s/{skip_surf}/$SKIP_SURF/" ${NAMELGL} > ./gl_namel
+
+       # Running the GL
+       /usr/bin/time -v mpiexec -n 1 ${BINGL} -lbc ifs ECMWF_${mem}_small.grb -o ELSCFAROMALBC0${jj} -d -s -n gl_namel
+
+       rename ELSCFAROMALBC0${jj} ${COUPLDIR}/ICMSHBC${mem}+00${jj} ELSCFAROMALBC0${jj}
+
+    else
+
+       echo "File already there"
+       ecflow_client --label=info "Couplingfile already there"
+
+    fi
+
+    (( i=$i+1 ))
+
+done
+
+cd ${COUPLDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

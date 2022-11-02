@@ -1,0 +1,15 @@
+#dummy script to launch C-LAEF runs
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+echo "BC forecast +12 available, launch C-LAEF"
+ecflow_client --label=info "BC forecast +12 available, launch C-LAEF ${run}"
+
+%include <tail.h>

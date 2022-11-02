@@ -1,0 +1,41 @@
+%manual
+TASK:
+    claef/admin/cleanlog
+
+DESCRIPTION:
+    This task cleans the ecflow_server logfile once a month
+
+SOURCE:
+    '~zat2/ecf/scripts/cleanlog.ecf'
+
+TRIGGER:
+    date (28th every month) and time (05:00 UTC) dependency
+
+MAIN FRAME:
+    ecgate
+
+OPERATOR:
+    - If this task fails, set it complete
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+# Script for cleaning logfile
+
+HOST=ecgate
+
+%include <qsub.h>
+%include <head.h>
+
+ecflow_client --label=info "Save old logfile"
+cp %ECF_LOG% /scratch/ms/at/%USER%/ecflow_logs/ecgate.%ECF_PORT%.ecf.log.%ECF_DATE%
+gzip /scratch/ms/at/%USER%/ecflow_logs/ecgate.%ECF_PORT%.ecf.log.%ECF_DATE%
+ 
+ecflow_client --label=info "Cleaning ecflow logfile"
+ecflow_client --port=%ECF_PORT% --host=%ECF_HOST% --log=clear
+
+%include <tail.h>

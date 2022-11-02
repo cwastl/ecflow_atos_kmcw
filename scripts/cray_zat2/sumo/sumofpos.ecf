@@ -1,0 +1,178 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/progrid
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task converts FA output files to grib format
+
+SOURCE:
+    '~zat2/ecf/scripts/progrid.ecf'
+
+TRIGGER:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/001:e
+
+COMPLETE:
+    :LEAD < :LEADT  !This task is not necessary for short runs
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, set complete 
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+#prgenvswitchto intel
+#module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+files=%STHOST%
+user=%USER%
+
+#############################Run setup script for environment##############################
+#. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user $files
+###########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+leadtime=%LEAD%
+
+MY_DIR=/sc1/tcwork/zat2/lb/SUMO/MEM_%MEMBER%
+
+[[ ! -d ${MY_DIR} ]] && mkdir -p ${MY_DIR}
+[[ ! -d ${MY_DIR}/%DATUM% ]] && mkdir -p ${MY_DIR}/%DATUM%
+[[ ! -d ${MY_DIR}/%DATUM%/%LAUF% ]] && mkdir -p ${MY_DIR}/%DATUM%/%LAUF%
+
+RUNDIR=${MY_DIR}/%DATUM%/%LAUF%/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+my_source=/sc1/tcwork/zat/lb/CLAEF/DATA/%DATUM%/%LAUF%/MEM_%MEMBER%/001/
+namelist=/sc1/home/zat2/SUMO/NAMEL/namelist_fpos_AROMEsumo_cy43t2
+# MPI, openMP env, etc.
+
+export PSM2_RANKS_PER_CONTEXT=2
+
+export MPI_DSM_CPULIST="0-35:allhosts"
+export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_VERBOSE=1
+
+export MPI_MEM_ALIGN=128
+export MPI_BUFFER_MAX=2000000
+export MPI_BUFS_PER_PROC=1024
+export MPI_REQUEST_MAX=400000
+#
+export MKL_DYNAMIC=FALSE
+export F_UFMTENDIAN=big
+export FORT_BUFFERED=true
+export FORT_BLOCKSIZE=1048576
+
+export OMP_NUM_THREADS=1
+export OMP_DYNAMIC=FALSE
+export KMP_STACKSIZE=500m
+export KMP_MONITOR_STACKSIZE=500m
+export KMP_AFFINITY=disabled
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+export EC_PROFILE_HEAP=0
+#
+
+export NSLOTS=`cat $PBS_NODEFILE | wc -l`
+
+
+NPROMA=-32
+
+NPROC=36
+NPRGPNS=18
+NPRGPEW=2
+NPRTRV=${NPRGPEW}
+NPRTRW=${NPRGPNS}
+NSTRIN=`expr $NPROC \/ 2`
+NSTROUT=`expr $NPROC \/ 2`
+LSPRT=.TRUE.
+
+EXP=AROM
+export TSTEP=60
+export EXEC=/sc1/tcwork/zat/lb/CLAEF/BIN/cy43t2/MASTERODB_cy43t2
+sed -e   "s/{nproma}/$NPROMA/"\
+    -e   "s/{lsprt}/.TRUE./"\
+    -e   "s/{experiment}/AROM/"\
+    -e   "s/{nproc}/$NPROC/"\
+    -e   "s/{nprgpew}/$NPRGPEW/"\
+    -e   "s/{nprgpns}/$NPRGPNS/"\
+    -e   "s/{nprtrv}/$NPRTRV/"\
+    -e   "s/{nstrin}/$NSTRIN/"\
+    -e   "s/{nstrout}/$NSTROUT/"\
+    -e   "s/{tstep}/$TSTEP/"\
+    -e   "s/{nprtrw}/$NPRTRW/g" ${namelist} > ${RUNDIR}/NAMELIST
+
+#cp  ${namelist_select}  ${RUNDIR}/NAMELIST_SELECT
+
+typeset -i step
+typeset -i count
+
+(( step = 0 ))
+(( count = 0 ))
+
+while [[ ${step} -le %LEAD% ]]
+do
+  cstep=$(echo ${step} | awk -v a=${step} '{ printf "%%04d",a*1}')
+
+  if [[ "${cstep}" == "0000" ]]
+  then
+    grep -v CFPCFU NAMELIST > fort.4_
+    mv fort.4_ fort.4
+
+  else
+       cp NAMELIST fort.4
+
+  fi
+
+
+  if [[ -f $my_source/ICMSHAROM+${cstep} ]]
+  then
+
+    ln -s $my_source/ICMSHAROM+${cstep} ICMSHFPOSINIT
+
+    /usr/bin/time aprun -n ${NPROC} ${EXEC} 
+
+    if [[ $? -eq 0 ]]
+    then
+       (( count = ${count} + 1 ))
+    fi
+
+    mv NODE.001_01 ${MY_DIR}/%DATUM%/%LAUF%/NODE_AROMEsumo+${cstep}
+
+    mv PFFPOSAROM+0000 ${MY_DIR}/%DATUM%/%LAUF%/AROMEsumo+${cstep}.fa
+
+  fi
+
+
+  rm -f ICMSH*INIT
+  rm -f fort*
+
+    (( step=$step+1 ))
+done
+
+
+if [[ ${count} -lt %LEAD% ]]
+then
+   echo "Failure in sumo archiving of c-laef" | mailx -s "ERROR: SUMO archiving of C-LAEF" florian.weidle@zamg.ac.at
+fi
+
+cd ${MY_DIR}/%DATUM%/%LAUF%
+
+rm -rf ${RUNDIR:="xxx"}
+
+%include <tail.h>

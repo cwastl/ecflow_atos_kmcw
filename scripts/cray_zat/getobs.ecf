@@ -1,0 +1,153 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/obs/getobs
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task fetches observations from ZAMG
+
+SOURCE:
+    '~zat/CLAEF/scripts/getobs.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and time dependency (01:45, 04:45, 07:45, 10:45, 13:45, 16:45, 19:45, 22:45)
+
+COMPLETE:
+    :ASSIM == 0  !run without data assimilation
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task
+    - If failure persists, set :ASSIM == 0 in family claef/runs/RUN_[HH]/obs and requeue family (run without data assimilation), set :ASSIM == 0 in family
+      claef/runs/RUN_[HH]/main. Don't forget to remove :ASSIM local variable in family claef/runs/RUN_[HH]/main/MEM_[MM], after run ended successfully.)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+files=%STHOST%
+user=%USER%
+
+set +e
+
+#################################Run setup script for environment####################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 999 $user $files
+#####################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${OBSDIR} ]] && mkdir -p ${OBSDIR}
+cd ${OBSDIR}
+
+TRANSOK=0
+# First get OPLACE data - /ment_arch/aladin/ASSIM/
+ecflow_client --label=info "Copy OPLACE data"
+fectrans=wastl_eps
+
+if [[ -s ${OBSDIRLAEF}/obs_short_${date}${run}.tar ]]
+then
+   echo "Obs_short taken from LAEF" 
+   ecflow_client --label=info "Obs_short taken from LAEF"
+   cp ${OBSDIRLAEF}/obs_short_${date}${run}.tar .
+   (( TRANSOK = ${TRANSOK} + 1 ))
+else
+   ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/ASSIM/OPLACE_archive/obs_short_${date}${run}.tar -overwrite -verbose
+   CODEREP=$?
+   if (( ${CODEREP} !=0 )) #-- Transfer failed
+   then
+      echo "transfer of obs_short from ZAMG failed"
+      ecflow_client --label=info "error obs_short"
+   else
+      (( TRANSOK = ${TRANSOK} + 1 ))
+   fi
+fi
+
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/ASSIM/OPLACE_archive/obs_foreign_${date}${run}.tar.gz -overwrite -verbose
+CODEREP=$?
+if (( ${CODEREP} !=0 )) #-- Transfer failed
+then
+   echo "transfer of obs_foreign from ZAMG failed"
+   ecflow_client --label=info "error obs_foreign"
+else
+   (( TRANSOK = ${TRANSOK} + 1 ))
+fi
+gunzip -f obs_foreign_${date}${run}.tar.gz
+
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S/DATA_IN/${date}/obsoul_MODES_${date}_${run}00_RUC -overwrite -verbose
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S_ACG/DATA_OUT/${date}/obsoul_MODES_aut_${date}_${run}00.asc -overwrite -verbose
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S_ACG/DATA_OUT/${date1}/obsoul_MODES_aut_${date1}_${hh1}00.asc -overwrite -verbose
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S_ACG/DATA_OUT/${date2}/obsoul_MODES_aut_${date2}_${hh2}00.asc -overwrite -verbose
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S_ACG/DATA_OUT/${date3}/obsoul_MODES_aut_${date3}_${hh3}00.asc -overwrite -verbose
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/MODE-S_ACG/DATA_OUT/${date4}/obsoul_MODES_aut_${date4}_${hh4}00.asc -overwrite -verbose
+
+# Now get ZAMG observations - /modelle/prod/mgruppe
+ecflow_client --label=info "Copy ZAMG data"
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_amdar_${date}_${run}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date1}/obsoul_amdar_${date1}_${hh1}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date2}/obsoul_amdar_${date2}_${hh2}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date3}/obsoul_amdar_${date3}_${hh3}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date4}/obsoul_amdar_${date4}_${hh4}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_pilot_${date}_${run}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_ship_${date}_${run}0000.asc -overwrite -verbose 
+
+if [[ -s ${OBSDIRLAEF}/obsoul_taw_${date}_${run}0000.asc ]]
+then
+   echo "TAWES obs taken from LAEF"
+   ecflow_client --label=info "TAWES obs taken from LAEF"
+   cp ${OBSDIRLAEF}/obsoul_taw_${date}_${run}0000.asc .
+   (( TRANSOK = ${TRANSOK} + 1 ))
+else
+   ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_taw_${date}_${run}0000.asc -overwrite -verbose 
+   CODEREP=$?
+   if (( ${CODEREP} !=0 )) #-- Transfer failed
+   then
+      echo "transfer of TAWES from ZAMG failed"
+      ecflow_client --label=info "error tawes"
+   else
+      (( TRANSOK = ${TRANSOK} + 1 ))
+   fi
+fi
+
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_temp_${date}_${run}0000.asc -overwrite -verbose 
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/ODB/${date}/obsoul_${date}_${run}0000.asc -overwrite -verbose 
+
+#Laketemps
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../modelle/prod/mgruppe/OBS/LAKE_TEMPERATURE/laketemperatures_${date}.txt -overwrite -verbose
+
+#Snowgrid
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/SNOWGRID2/ELSCFARCWALBC000 -target ./ELSCFAR33ALBC000_snow_${date} -overwrite -verbose
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/SNOWGRID/ELSCFARCWALBC000 -target ./ELSCFAROMALBC000_snow_${date} -overwrite -verbose
+
+#Satellite/ASCAT
+#ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/ASSIM/OPLACE_archive/${date}/ascat_${date}_${run}????_metopa_?????_ear_o_250_ovw.l2_bufr.gz -overwrite -verbose
+
+#GPS data
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/TU_GNSS/ARCHIVE/${date}/OBSOUL.TU.${date}${run}00.plusproch -overwrite -verbose
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/TU_GNSS/ARCHIVE/${date}/OBSOUL_TUAT_${date}${run}00.plusproch -overwrite -verbose
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/TU_GNSS/ARCHIVE/${date1}/OBSOUL_TUAT_${date1}${hh1}00.plusproch -overwrite -verbose
+ectrans -gateway zaaecm99.zamg.ac.at -remote ${fectrans} -get -source /../../../ment_arch/aladin/EGVAP/OBSOUL/OBSOUL_EGVAP_${date1}${hh1}00.plusproch -overwrite -verbose
+
+if [[ ${TRANSOK} -ge 1 ]]
+then
+   echo "observations available"
+   ecflow_client --label=info "observations available, assim=1"
+else
+   echo "no observations at all"
+   ecflow_client --label=info "no observations at all, assim=0"
+fi
+
+ecflow_client --meter=obsprog ${TRANSOK} 
+
+%include <tail.h>

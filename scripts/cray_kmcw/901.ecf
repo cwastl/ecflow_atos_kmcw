@@ -1,0 +1,148 @@
+# Script to run 901 for preparation of 927
+
+%include <pbs.h>
+%include <head.h>
+
+module load craype-hugepages2M
+module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+user=%USER%
+
+##################Run setup script for environment#################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg 999 $user
+###################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${COUPLDIR} ]] && mkdir -p ${COUPLDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${COUPLDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+ln -sf ${BIN901} MASTER
+#ln -sf ${BINMASTER} MASTER
+#ln -sf /home/ms/at/kmcw/PACKS/AROME_CY43_ZAMG/bin/MASTERODB MASTER
+
+export OMP_NUM_THREADS=$EC_threads_per_task
+
+i=$lagg
+(( triggert=${leadtime} - ${lagg} ))
+(( leadtime=$leadtime+$lagg ))
+while (( $i <= $leadtime )) ; do
+
+    ii=$(printf "%%03d" $i)
+
+    (( WAITCOUNT = 0 ))
+
+    rm -f ICMUAa001INIT ICMSHa001INIT ICMGGa001INIT
+    rm -f CN90xa001INIT
+    rm -f NODE.001_01
+    rm -f Const.Clim
+    rm -f ifs.*
+
+    #--- prepare namelist
+    rm -f fort.4
+    ln -sf ${NAMEL901} fort.4
+
+    TFT=00
+    MM_FT=$(echo ${n1date} | cut -c 5-6)
+    ln -sf ${CLIMFILENAME_ECMWF_GLO}${MM_FT} Const.Clim
+    
+    while [[ ${WAITCOUNT} -le 120 ]]
+    do
+
+       if [[ -s ${COUPLDIR}/ICMSHBC${mem}+0${ii} ]]
+       then
+
+          ecflow_client --label=info "Couplingfile +${ii} already there"        
+          (( WAITCOUNT = 300 )) 
+ 
+       elif [[ -s ${LBCDIR}/atm.pdg.grib_${n1date}${n1run}+${ii} ]] && [[ -s ${LBCDIR}/atm.spe.grib_${n1date}${n1run}+${ii} ]] && [[ -s ${LBCDIR}/sol.pdg.grib_${n1date}${n1run}+${ii} ]]
+       then
+
+          ln -s ${LBCDIR}/atm.pdg.grib_${n1date}${n1run}+${ii} ICMUAa001INIT
+          ln -s ${LBCDIR}/atm.spe.grib_${n1date}${n1run}+${ii} ICMSHa001INIT
+          ln -s ${LBCDIR}/sol.pdg.grib_${n1date}${n1run}+${ii} ICMGGa001INIT
+
+          ecflow_client --label=info "901 for +${ii}"
+          /usr/bin/time -v mpiexec MASTER -t160 -ea001 -fd5 -aeul -c901 -vecmwf 
+          CODEREP=$?
+
+          if (( ${CODEREP} !=0 ))
+          then
+             echo "901 for ${ii} failed"
+             ecflow_client --label=error "901 for ${ii} failed"
+             rename 901.out ${LOGDIR}/${mem}-901.out.${ii} 901.out
+             rename 901.err ${LOGDIR}/${mem}-901.err.${ii} 901.err
+             rename NODE.001_01 ${d_LOG}/${mem}-901.node.${ii} NODE.001_01
+             exit 1
+          fi
+
+          rename CN90xa001INIT fort.11 CN90xa001INIT
+          ln -sf Const.Clim fort.12
+          ln -sf ${NAMELADDSURFold} fort.4
+
+          ln -sf ${BINADDSURF} ADDSURF
+          ecflow_client --label=info "ADDSURF for +${ii}"
+          /usr/bin/time -v mpiexec ADDSURF fort.11 fort.12
+          CODEREP=$?
+          rename fort.11 ${COUPLDIR}/ICMSHBC${mem}+0${ii} fort.11
+
+          if (( ${CODEREP} !=0 ))
+          then
+             echo "ADDSURF for ${ii} failed"
+             ecflow_client --label=error "ADDSURF for ${ii} failed"
+             rename addArpClim.out ${LOGDIR}/pf_${mem}-addArpClim.out.${ii} addArpClim.out
+             rename addArpClim.err ${LOGDIR}/pf_${mem}-addArpClim.err.${ii} addArpClim.err
+     	     exit 1
+          fi
+
+          (( WAITCOUNT = 300 ))
+
+       else
+
+          ecflow_client --label=info "Something is missing, ${WAITCOUNT}"
+          (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+          sleep 60
+
+       fi
+
+    done
+
+    if [[ ${WAITCOUNT} -le 121 ]]
+    then
+       echo "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+       ecflow_client --label=error "AT LEAST ONE FILE FROM DISSEMINATION DOES NOT EXIST!!!"
+       exit 999
+    fi
+
+    if (( ${i} > ${triggert} ))
+    then
+
+      ecflow_client --event=c
+
+    fi
+
+    (( i=$i+$couplfr ))
+
+done
+
+cd ${COUPLDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

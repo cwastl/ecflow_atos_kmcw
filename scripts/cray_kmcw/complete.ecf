@@ -1,0 +1,16 @@
+# Script to set suite to complete if date is old
+
+%include <pbs.h>
+%include <head.h>
+
+date=%ECF_DATE%
+sname=%SUITENAME%
+
+# report to ecflow
+ecflow_client --label=run "The date is ${date}"
+
+echo "Set suite "  ${sname} " complete"
+ecflow_client --label=info "Set suite " $sname " complete"
+ecflow_client --force=complete recursive /${sname}/runs
+
+%include <tail.h>

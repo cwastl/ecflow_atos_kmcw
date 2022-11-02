@@ -1,0 +1,252 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/transfer
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task transfers output GRIB files to ZAMG
+
+SOURCE:
+    '~zat/CLAEF/scripts/transfer.ecf'
+
+TRIGGER:
+    :TRANSF == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/addgrib:g
+
+COMPLETE:
+    :LEAD < :LEADT or :TRANSF == 0 !This task is not necessary for short runs
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun this task.
+    - If failure persists for less than 3 members set task and family claef/runs/RUN_[HH]/main/MEM_[MM] complete
+    - If failure persists for more than 3 members, please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+step15=%STEPS15%
+assimc=%ASSIMC%
+files=%STHOST%
+user=%USER%
+blocks=%BLOCKS%
+
+set +e
+
+###########################Run setup script for environment###############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user $files
+##########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+cd ${ADDGRIBDIR}
+
+if [ ${mem} == "00" ] ; then
+  ADDGRIBOUTS=${ADDGRIBOUTSIZECTL} 
+else
+  ADDGRIBOUTS=${ADDGRIBOUTSIZE}
+fi
+(( ADDGRIBOUTS1=${ADDGRIBOUTS}*0.97 ))
+(( ADDGRIBOUTS2=${ADDGRIBOUTS}*1.03 ))
+
+
+if [ ${leadtime} -gt ${assimc} ]; then
+  block=1
+  jj=0
+  (( blockn = ${leadtime} / ${blocks} ))
+  while (( ${block} <= ${blockn} ))
+  do
+
+     if [ ${block} -eq 1 ] ; then
+        (( blocko = ${jj} + ${blocks} ))
+     else
+        (( blocko = ${jj} + ${blocks} - 1 ))
+     fi
+
+     cstep=$(printf "%%04d" ${blocko})
+     (( WAITCOUNT = 0 ))
+     while (( ${WAITCOUNT} <= 120 ))
+     do
+
+       INFILE=${ADDGRIBDIR}/CLAEF${mem}+${cstep}:00.grb
+
+       ecflow_client --label=info "Check field number ${cstep}"
+
+       (( stepfail = 0 ))
+       if [ ${mem} == "00" ] ; then
+          ADDGRIBNBR=$ADDGRIBOUTNBRCTL
+       else
+          ADDGRIBNBR=$ADDGRIBOUTNBR
+       fi
+
+       while (( $stepfail < 10 )) ; do
+          if [ $(grib_count ${INFILE}) -ne ${ADDGRIBNBR} ]
+          then
+
+             (( stepfail=${stepfail}+1 ))
+             sleep 10
+
+          else
+
+             (( stepfail = 11 ))
+
+          fi
+       done
+
+       if [ ${stepfail} -eq 10 ]
+       then
+
+          ecflow_client --label=error "Fieldnbr ${cstep} not ok"
+          echo "Fieldnbr not ok" ${cstep}
+          echo "Fehler fieldnbr" ${mem} "+" ${cstep} | mail -s "Fehler addgrib" clemens.wastl@zamg.ac.at
+          exit 1
+
+       fi  
+
+       if [ -s ${INFILE} ] && [ $(/usr/bin/stat --printf="%%s" ${INFILE}) -gt ${ADDGRIBOUTS1} ] && [ $(/usr/bin/stat --printf="%%s" ${INFILE}) -lt ${ADDGRIBOUTS2} ]; then 
+  
+         ii=0
+         while (( ${jj} <= ${blocko} ))
+         do
+
+           if [ ${step15} -eq 1 ] && [ ${jj} < ${leadtime} ] ; then
+         
+             my_min="00 15 30 45"
+
+           else
+
+             my_min="00"
+
+           fi
+
+           cstep2=$(printf "%%04d" $jj)
+           filen=CLAEF_${run}_${mem}_b${block}.tar
+
+           for min in ${my_min[*]} ; do
+            
+              if [ ${ii} -eq 00 ];then
+                 tar -cvf ${filen} CLAEF${mem}+${cstep2}:${min}.grb
+              else
+                 tar -rvf ${filen} CLAEF${mem}+${cstep2}:${min}.grb
+              fi
+              (( ii = ${ii} + 1 ))
+
+           done
+
+           (( jj = ${jj} + 1 ))
+      
+         done
+
+         gzip ${filen} 
+         (( CHECKTRANS = 1 ))
+
+         while (( ${CHECKTRANS} <= 20 ))
+         do
+
+            ecflow_client --label=info "Copying ${filen}.gz"
+            ectrans -gateway zaaecm99.zamg.ac.at -remote nwpmodelle -put -source ${ADDGRIBDIR}/${filen}.gz -target /TMP/MEM_${mem}/${filen}.gz -overwrite -verbose #-mailto clemens.wastl@zamg.ac.at -onfailure
+
+            CODEREP=$?
+            if (( ${CODEREP} !=0 ))
+            then
+
+               ecflow_client --label=info "Copying ${filen}.gz failed, ${CHECKTRANS}"
+               (( CHECKTRANS = ${CHECKTRANS} + 1 ))
+               sleep 60
+
+            else
+
+               (( CHECKTRANS = 30 ))
+               (( CHECKTRANSOK = 1 ))  
+               BOKFILE=CLAEF${mem}_b${block}.grb.ok
+               echo ${date}${run} > $BOKFILE
+
+               while (( ${CHECKTRANSOK} <= 20 ))
+               do
+   
+                  ectrans -gateway zaaecm99.zamg.ac.at -remote nwpmodelle -put -source ${ADDGRIBDIR}/${BOKFILE} -target /OKAY/${BOKFILE} -overwrite -verbose #-mailto clemens.wastl@zamg.ac.at -onfailure
+
+                  CODEREP2=$?
+                  if (( ${CODEREP2} !=0 ))
+                  then
+
+                     ecflow_client --label=info "Copying ${BOKFILE} failed, ${CHECKTRANSOK}"
+                     (( CHECKTRANSOK = ${CHECKTRANSOK} + 1 ))
+                     sleep 60
+  
+                  else
+
+                     (( CHECKTRANSOK = 30 ))
+ 
+                  fi
+
+               done
+
+            fi
+
+         done
+
+         if (( ${CHECKTRANS} == 20 || ${CHECKTRANSOK} == 20 ))
+         then
+
+            ecflow_client --label=error "Copying failed, exit"
+            exit 90
+
+         fi
+  
+         (( WAITCOUNT = 200 ))
+
+       else
+
+         (( WAITCOUNT = ${WAITCOUNT} + 1 ))
+         ecflow_client --label=info "${INFILE} does not yet exist, wait!"
+         sleep 60
+   
+       fi
+
+       if [[ ${WAITCOUNT} -eq 60 ]]
+       then
+
+          ecflow_client --label=error "${INFILE} still does not yet exist, exit!"
+          exit 20
+
+       fi
+
+     done
+
+     rm -rf ${filen}*
+
+     (( block = ${block} + 1 ))
+   
+  done
+
+#  if [[ ${mem} == "00" ]]
+#  then
+ 
+     ecflow_client --label=info "Copying sfx file"
+     ectrans -gateway zaaecm99.zamg.ac.at -remote claef_zat -put -source ${C001DIR}/ICMSH${EXP}+0000.sfx -target /../../CLAEF/PRODUCTION/SOILANA/ICMSHAROM+0000_${mem}.sfx -overwrite -verbose
+   
+#  fi
+
+fi
+
+%include <tail.h>

@@ -1,0 +1,3549 @@
+# 4.17.2
+suite claef
+  edit ECF_EXTN '.ecf'
+  edit ECF_TRIES '1'
+  edit ASSIMC '3'
+  edit ECF_INCLUDE '/home/ms/at/zat2/ecf/include'
+  edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 %SCHOST% %ECF_JOB% %ECF_JOBOUT%'
+  edit ECF_MICRO '%'
+  edit ECF_LOGHOST '%SCHOST%-log'
+  edit ACCOUNT 'ata01'
+  edit KOPPLUNG '1'
+  edit STHOST 'sc1'
+  edit ECF_HOME '/home/ms/at/zat2/ecf'
+  edit USER 'zat2'
+  edit ECF_LOGPORT '38776'
+  edit ECF_OUT '/%STHOST%/tcwork/zat2/sb/CLAEF'
+  edit CNF_DEBUG '0'
+  edit SCHOST 'cca'
+  family admin
+    task cleanlog
+      edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+      edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+      edit NAME 'cleanlog'
+      label info ""
+      time 05:00
+      date 28.*.*
+    task complete
+      edit NP '1'
+      edit SUITENAME 'claef'
+      edit CLASS 'ts'
+      edit NAME 'complete'
+      label run ""
+      label info ""
+      cron 00:30
+    family operator
+      task switch_schost
+        defstatus suspended
+        edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+        edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+        edit NAME 'switch_sc'
+        label info ""
+      task switch_sthost
+        defstatus suspended
+        edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+        edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+        edit NAME 'switch_st'
+        label info ""
+    endfamily
+  endfamily
+  family runs
+    repeat date DATUM 20210917 20221231 1
+    task dummy
+      defstatus suspended
+      edit NP '1'
+      edit NAME 'dummy'
+      edit CLASS 'ns'
+      label run ""
+      label info ""
+    family RUN_00
+      edit VORHI '6'
+      edit LEADCTL '48'
+      edit LAUF '00'
+      edit LEAD '48'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 02:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 10:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 0155 and /claef:TIME < 0205
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_03
+      edit VORHI '9'
+      edit LEADCTL '3'
+      edit LAUF '03'
+      edit LEAD '3'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 05:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 08:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 0455 and /claef:TIME < 0505
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_06
+      edit VORHI '6'
+      edit LEADCTL '6'
+      edit LAUF '06'
+      edit LEAD '6'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 08:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 11:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 0755 and /claef:TIME < 0805
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_09
+      edit VORHI '9'
+      edit LEADCTL '3'
+      edit LAUF '09'
+      edit LEAD '3'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 11:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 14:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 1055 and /claef:TIME < 1105
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_12
+      edit VORHI '6'
+      edit LEADCTL '6'
+      edit LAUF '12'
+      edit LEAD '6'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 14:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 17:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 1355 and /claef:TIME < 1405
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_15
+      edit VORHI '9'
+      edit LEADCTL '3'
+      edit LAUF '15'
+      edit LEAD '3'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 17:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 20:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 1655 and /claef:TIME < 1705
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_18
+      edit VORHI '6'
+      edit LEADCTL '6'
+      edit LAUF '18'
+      edit LEAD '6'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 20:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 23:15
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 1955 and /claef:TIME < 2005
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+    family RUN_21
+      edit VORHI '9'
+      edit LEADCTL '3'
+      edit LAUF '21'
+      edit LEAD '3'
+      family dummy
+        family ez_trigger
+          task dummy1
+            defstatus suspended
+            edit NP '1'
+            edit NAME 'dummy1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family check_obs
+          task dummy2
+            complete ../../obs == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 23:30
+        endfamily
+        family check_main
+          task dummy2
+            complete ../../main == complete
+            edit NP '1'
+            edit NAME 'dummy2'
+            edit CLASS 'ts'
+            label run ""
+            label error ""
+            time 00:25
+        endfamily
+      endfamily
+      task cleaning
+        trigger dummy/ez_trigger/dummy1 == complete
+        edit NP '1'
+        edit ANZMEMB '2'
+        edit NAME 'cleaning'
+        edit CLASS 'ts'
+        label run ""
+        label info ""
+      family obs
+        edit ASSIM '1'
+        task getobs
+          complete :ASSIM == 0
+          trigger :ASSIM == 1 and /claef:TIME > 2255 and /claef:TIME < 2305
+          edit NP '1'
+          edit NAME 'getobs'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          meter obsprog -1 3 3
+        task pregps
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'pregps'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and getobs == complete
+          edit NP '1'
+          edit NAME 'bator'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+          label error ""
+        task bator3D
+          complete :ASSIM == 1 and getobs:obsprog == 0 or :ASSIM == 0
+          trigger :ASSIM == 1 and pregps == complete
+          edit NP '1'
+          edit NAME 'bator3D'
+          edit CLASS 'ts'
+          label run ""
+          label info ""
+      endfamily
+      family main
+        edit ASSIM '1'
+        edit PERTS '0'
+        edit ARCHIV '0'
+        edit SEDA '0'
+        edit LEADT '48'
+        edit TRANSF '0'
+        family MEM_00
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '00'
+            edit NAME '927_00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME '927surf00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'sstex00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'addsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'varbccomb00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '00'
+            edit EDA '0'
+            edit NAME 'screen00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'screensurf00'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '00'
+            edit NAME 'canari00'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim00'
+            edit ASSIMM '0'
+            edit MEMBER '00'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'pertsurf00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/001:e
+            edit NP '1'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NAME 'progrid00'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_00/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '00'
+            edit NAME 'verif00'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_00/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer00'
+            edit MEMBER '00'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '00'
+            edit NAME 'archmars00'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+        family MEM_01
+          task 927
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '16'
+            edit MEMBER '01'
+            edit NAME '927_01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            event d
+          task 927surf
+            trigger ../../dummy/ez_trigger/dummy1 == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME '927surf01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+          task sstex
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and ../../obs/getobs == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'sstex01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task addsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and sstex == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'addsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task varbccomb
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and addsurf == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'varbccomb01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task screen
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator3D == complete
+            edit NP '36'
+            edit MEMBER '01'
+            edit EDA '0'
+            edit NAME 'screen01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task screensurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and varbccomb == complete and ../../obs/bator == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'screensurf01'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+          task canari
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screensurf == complete
+            edit NP '1'
+            edit CLASS 'ts'
+            edit MEMBER '01'
+            edit NAME 'canari01'
+            edit SEDA '0'
+            label run ""
+            label info ""
+          task minim
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0
+            trigger :ASSIM == 1 and screen == complete
+            edit ENSJK '0'
+            edit NAME 'minim01'
+            edit ASSIMM '0'
+            edit MEMBER '01'
+            edit NP '36'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+          task pertsurf
+            complete :ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0 or :PERTS == 0 or :MEMBER == 00
+            trigger :ASSIM == 1 and canari == complete
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'pertsurf01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+          task 001
+            trigger 927 == complete and minim == complete and pertsurf == complete
+            edit NAME '001_01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '360'
+            edit STOCH '0'
+            edit CLASS 'tp'
+            label run ""
+            label info ""
+            label error ""
+            event e
+          task progrid
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/001:e
+            edit NP '1'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NAME 'progrid01'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event f
+          task addgrib
+            complete :LEAD < :LEADT
+            trigger ../MEM_01/progrid:f
+            edit BLOCKS '6'
+            edit NAME 'addgrib01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'tf'
+            label run ""
+            label info ""
+            label error ""
+            event g
+          task verif
+            complete :LEAD < :LEADT or :MEMBER != 00
+            edit NP '1'
+            edit MEMBER '01'
+            edit NAME 'verif01'
+            edit CLASS 'ns'
+            label run ""
+            label info ""
+            time 04:30
+          task transfer
+            complete :LEAD < :LEADT or :TRANSF == 0
+            trigger :TRANSF == 1 and ../MEM_01/addgrib:g
+            edit BLOCKS '6'
+            edit NAME 'transfer01'
+            edit MEMBER '01'
+            edit STEPS15 '0'
+            edit NP '1'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+            label error ""
+          task archmars
+            complete :LEAD < :LEADT or :ARCHIV == 0
+            trigger :ARCHIV == 1 and transfer == complete
+            edit NP '1'
+            edit ANZMEMB '2'
+            edit MEMBER '01'
+            edit NAME 'archmars01'
+            edit CLASS 'ts'
+            label run ""
+            label info ""
+        endfamily
+      endfamily
+      family harp
+        edit ACCOUNT 'ata01'
+        edit HARPI '1'
+        edit LEADT '48'
+        task harpio
+          complete :LEAD < :LEADT or :HARPI == 0
+          trigger :HARPI == 1 and ../main == complete
+          edit ECF_JOBOUT '%ECF_HOME%/ecf_out/ecf.out'
+          edit ECF_JOB_CMD '/usr/local/apps/schedule/1.4/bin/schedule zat2 ecgb %ECF_JOB% %ECF_JOBOUT%'
+          edit NAME 'harpio'
+          label run ""
+          label info ""
+      endfamily
+    endfamily
+  endfamily
+endsuite
+# enddef

@@ -1,0 +1,77 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/addsurf
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task adds some ECMWF surface fields to C-LAEF first guess
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/addsurf.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/sstex == complete
+
+COMPLETE: 
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set :ASSIM == 0 in family claef/runs/RUN_[HH]/main/MEM_[MM] (this adds a local variable and this member runs without data
+      assimilation. Don't forget to remove :ASSIM local variable in family claef/runs/RUN_[HH]/main/MEM_[MM], after run ended successfully.)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+%include <job_geometry.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+user=%USER%
+
+#################Run setup script for environment#########################
+. /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user
+##########################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${ADDSURFDIR} ]] && mkdir -p ${ADDSURFDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${ADDSURFDIR}/$SLURM_JOB_ID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+# Get input data (ELSC*, namelist, binary, etc.)
+cp ${SSTEXDIR}/AROME_SSTOK ./fort.11
+cp ${C927DIR}/ADDSURFAROMALBC000 ./fort.12
+
+# Copy namelist
+cp ${NAMELADDSURF} fort.4
+
+ecflow_client --label=info "Addsurf"
+srun ${BINADDSURF} > ${LOGDIR}/ADDSURF_%ECF_TRYNO%_${mem}.LOG 2>&1
+
+mv fort.11 ${ADDSURFRESULTFILE}
+
+cd ${ADDSURFDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

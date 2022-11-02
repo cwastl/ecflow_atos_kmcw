@@ -1,0 +1,803 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/obs/bator3D
+
+    [HH]=00,03,06,09,12,15,18,21
+
+DESCRIPTION:
+    This task converts and cuts observations files for atmosphere
+
+SOURCE:
+    '~zat2/ecf/scripts/bator3D.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs == complete
+
+COMPLETE:
+    :ASSIM == 0   !run C-LAEF without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set :ASSIM == 0 in family claef/runs/RUN_[HH]/obs and requeue family (run without data assimilation), set :ASSIM == 0 in family
+      claef/runs/RUN_[HH]/main. Don't forget to set :ASSIM == 1 back in family claef/runs/RUN_[HH]/obs and to remove :ASSIM local variable in family claef/runs/RUN_[HH]/main/MEM_[MM], after run ended successfully.)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+files=%STHOST%
+user=%USER%
+
+set +e
+
+############################Run setup script for environment#########################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date 999 999 999 $user $files
+#####################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+module load cray-snplauncher
+prgenvswitchto intel
+module swap intel/18.0.0.033
+
+RADARSTATIONS="11038 11052 11164 11126 07291" # 11124
+RADARPARAMETER="DBZ VEL"
+RADARTIME="0000 0200"
+LRADAR=.FALSE.
+LDOPPLER=.FALSE.
+LREFL=.FALSE.
+LNATIONAL=.FALSE.
+LMODES=.TRUE.
+LMODESNATIONAL=.TRUE.
+L15MIN_FPOS=.FALSE.
+LMETAROBS=.FALSE.
+LHYDRO3D=.TRUE.
+LHYDROOBS=.TRUE.
+LGPS=.TRUE.        # using GPS observations if available
+LPSEUDO=.FALSE.     # using pseudosoundings from surface observations in the alps
+
+export MALLOC_CHECK_=0
+#export MALLOC_CHECK_=3
+
+[[ ! -d ${BATOR3DIR} ]] && mkdir -p ${BATOR3DIR}
+[[ ! -d ${LOGDIRBATOR} ]] && mkdir -p ${LOGDIRBATOR}
+[[ ! -d ${OBSDIR3D} ]] && mkdir -p ${OBSDIR3D}
+rm -f $OBSDIR3D/*
+cd $OBSDIR3D
+
+if [ -s $OBSFILE1 ]; then
+  export OBSFILEZAMG=$OBSFILE1
+  ecflow_client --label=info "ZAMG SYNOP+TAWES file there"
+elif [ -s $OBSFILE2 ] ; then
+  echo "no ZAMG SYNOP+TAWES file try synop only"
+  ecflow_client --label=info "No ZAMG SYNOP+TAWES file try synop only"
+  cp $OBSFILE2 $OBSFILE1
+  export OBSFILEZAMG=$OBSFILE1
+else
+  touch $OBSFILE1
+  export OBSFILEZAMG=$OBSFILE1 
+  echo "no ZAMG OBS file at all - try only OPLACE"
+  ecflow_client --label=info "No ZAMG OBS file at all - try only OPLACE"
+fi
+
+flag=0
+if [[ -f $OBSFILE3 ]]; then
+  tar xvf $OBSFILE3
+  flag=1
+elif [[ -f ${OBSFILE3h1} ]] ; then
+  flag=1
+  tar xvf ${OBSFILE3h1}
+elif [[ -f ${OBSFILE3h2} ]] ; then
+  flag=1
+  tar xvf ${OBSFILE3h2}
+elif [[ -f ${OBSFILE3h3} ]] ; then
+  flag=1
+  tar xvf ${OBSFILE3h3}
+fi 
+ 
+if (( $flag>0 )) ; then
+# create bufr_7 files
+  export satellite="noaa16 noaa18 noaa19 metop metopb snpp"
+  export instrument="hirs amsua amsub mhs iasi atms"
+  ecflow_client --label=info "Get satellite data"
+#rm -rf *metop_*
+
+  for INSTR in $instrument; do
+    touch bufr_7_${INSTR}
+    for SAT in $satellite; do
+      if [[ $SAT == "metopb" ]] && [[ $INSTR == "iasi" ]]; then
+        rm -f bufr_7_${INSTR}_${SAT}_??????????.gz
+      elif [[ $SAT == "noaa19" ]] && [[ $INSTR == "hirs" ]]; then
+        rm -f bufr_7_${INSTR}_${SAT}_??????????.gz
+      else
+        if [ -s bufr_7_${INSTR}_${SAT}_??????????.gz ]; then
+          gunzip -f bufr_7_${INSTR}_${SAT}_??????????.gz
+          cat bufr_7_${INSTR}_${SAT}_?????????? >>bufr_7_${INSTR}
+        fi
+  
+        if [ ! -s bufr_7_${INSTR}_${SAT}_?????????? ] && [ -s $OBSDIR3D/${INSTR}_????????_????_${SAT}_?????_???.l1c_bufr.gz ]; then
+          gunzip -f $OBSDIR3D/${INSTR}_????????_????_${SAT}_?????_???.l1c_bufr.gz
+          cat $OBSDIR3D/${INSTR}_????????_????_${SAT}_?????_???.l1c_bufr >>bufr_7_${INSTR}
+        fi
+      fi
+    done
+  done
+
+  cat bufr_7_mhs >> bufr_7_amsub
+  rm -f bufr_7_mhs
+  
+  touch bufr_6_europro
+  gunzip -f bufr_6_wp_xxxx_??????????.gz
+  cat bufr_6_wp_xxxx_?????????? >>bufr_6_europro
+  rm -f bufr_6_wp_xxxx_??????????
+
+  touch bufr_3_geowind
+
+  gunzip -f bufr_3_geowind_xx_*gz
+  cat bufr_3_geowind_xx_?????????? >>bufr_3_geowind
+  
+  rm -f bufr_3_geowind2
+  touch bufr_3_geowind2
+  if [ -s $OBSFILE18 ]; then
+    cat $OBSFILE18 >> bufr_3_geowind2
+  elif [ -s ${OBSFILE18}.gz ]; then
+    gunzip -f ${OBSFILE18}.gz
+    cat $OBSFILE18 >> bufr_3_geowind2
+  fi	
+  
+  rm -f bufr_3_geowind_xx_*
+  rm -f bufr_3_hrwind_xx_*
+
+  gunzip -f  grib_7_seviri_xx_*gz
+  gunzip -f  obsoul_1_xxxxxx_xx_*gz
+  gunzip -f  obsoul_2_xxxxxx_xx_*gz
+  gunzip -f  obsoul_5_xxxxxx_xx_*gz
+
+else
+  echo "no OPLACE OBS file at all - try only ZAMG OBS"
+  ecflow_client --label=info "No OPLACE OBS file - try only ZAMG"
+fi
+
+if [[ $LNATIONAL = ".TRUE." ]]; then
+  ecflow_client --label=info "National OBS files"
+  flag=0
+  if [ -s ${OBSFILE3b} ]; then
+    tar xvf $OBSFILE3b
+    flag=1
+  elif [ -s ${OBSFILE3bh1} ]; then
+    tar xvf $OBSFILE3bh1
+    flag=1
+  elif [ -s ${OBSFILE3bh2} ]; then
+    tar xvf $OBSFILE3bh2
+    flag=1
+  elif [ -s ${OBSFILE3bh3} ]; then
+    tar xvf $OBSFILE3bh3
+    flag=1
+  fi
+  if (( $flag > 0 )); then
+    rm -f obsoul_1_xxxxxy_at_??????????.gz
+    countries="cz sk si hu ro cr hr"
+    for cc in $countries ; do
+      if [[ -s obsoul_1_xxxxxy_${cc}_${date1}${hh1}.gz ]]; then
+         gunzip -f obsoul_1_xxxxxy_${cc}_${date1}${hh1}.gz
+      fi
+      if [[ -s obsoul_1_xxxxxy_${cc}_${date}${run}.gz ]];then
+         gunzip -f obsoul_1_xxxxxy_${cc}_${date}${run}.gz
+      fi
+      rm -f obsoul_1_xxxxxy_${cc}_??????????.gz
+    done    
+  fi
+fi
+rm -f $OBSDIR3D/bufr.ascat
+touch $OBSDIR3D/bufr.ascat
+
+#if [ -s $OBSDIR3D/ascat*gz ]; then
+#  ecflow_client --label=info "ASCAT"
+#  gunzip -f  ascat*gz
+#  for ascat in $(ls $OBSDIR3D/ascat*)
+#  do
+#     cat $ascat >> $OBSDIR3D/bufr.ascat
+#  done
+#fi
+
+METOP="metop metopb"
+for sat in $METOP ; do
+  if [ -s ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date}${run}.gz ] ; then
+    ecflow_client --label=info "ASCAT"
+    gunzip -f ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date}${run}.gz
+  fi
+  if [ -s ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date1}${hh1}.gz ] ; then
+    gunzip -f ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date1}${hh1}.gz
+  fi
+  if [ -s ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date2}${hh2}.gz ] ; then
+    gunzip -f ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date2}${hh2}.gz
+  fi
+  if [ -s ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date3}${hh3}.gz ] ; then
+    gunzip -f ${OBSDIR3D}/bufr_9_ascatC_${sat}_${date3}${hh3}.gz
+  fi
+done
+
+for ascat in $(ls ${OBSDIR3D}/bufr_9_ascatC_*) ; do
+  cat ${ascat} >> ${OBSDIR3D}/bufr.ascat
+  cp ${OBSDIR3D}/bufr.ascat .
+done
+
+[ ! -s $OBSDIR3D/bufr.ascat ] && rm -f $OBSDIR3D/bufr.ascat
+
+rm -f $OBSDIR3D/bufr.iasi
+touch $OBSDIR3D/bufr.iasi
+
+if [ -s $OBSDIR3D/*iasi_*gz ]; then
+  ecflow_client --label=info "IASI"
+  gunzip -f  *iasi_*gz
+  for iasi in $(ls $OBSDIR3D/*iasi_*)
+  do
+     cat $iasi >> $OBSDIR3D/bufr.iasi
+  done
+fi
+
+[ ! -s $OBSDIR3D/bufr.iasi ] && rm -f $OBSDIR3D/bufr.iasi
+
+rm -f $OBSDIR3D/*7_iasi_*
+
+rm -f $OBSDIR3D/bufr.ssmis
+touch $OBSDIR3D/bufr.ssmis
+
+if [ -s $OBSDIR3D/W_XX-EUMETSAT*gz ]; then
+  ecflow_client --label=info "EUMETSAT"
+  gunzip -f  W_XX-EUMETSAT*gz
+  for ssmis in $(ls $OBSDIR3D/W_XX-EUMETSAT*)
+  do
+     cat $ssmis >> bufr.ssmis
+  done
+fi
+
+[ ! -s $OBSDIR3D/bufr.ssmis ] && rm -f $OBSDIR3D/bufr.ssmis
+
+# RADAR
+if [[ $LRADAR = ".TRUE." ]] 
+then
+  for num in $RADARSTATIONS; do
+    ecflow_client --label=info "Radar data"
+    (( num2=$num+1 ))
+    touch ${OBSDIR3D:='xxx'}/bufr.$num
+    touch ${OBSDIR3D:='xxx'}/bufr.$num2
+    for radartype in $RADARPARAMETER; do
+      for minute in $RADARTIME; do
+        echo "$minute $RADARTIME"
+        if [ -s ${OBSDIR3D}/${date}${run}${minute}_${num}_${radartype}.bfr.gz ]; then
+          gunzip -f ${OBSDIR3D}/${date}${run}${minute}_${num}_${radartype}.bfr.gz
+          if [ $radartype = "DBZ" ] && [[ $LREFL = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date}${run}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num
+          elif [ $radartype = "VEL" ] && [[ $LDOPPLER = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date}${run}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num2
+          fi
+          gzip -f ${OBSDIR3D}/${date}${run}${minute}_${num}_${radartype}.bfr.gz
+        fi
+
+        if [ -s ${OBSDIR3D}/${date1}${hh1}${minute}_${num}_${radartype}.bfr.gz ]; then
+          gunzip -f ${OBSDIR3D}/${date1}${run1}${minute}_${num}_${radartype}.bfr.gz
+          if [ $radartype = "DBZ" ] && [[ $LREFL = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date1}${hh1}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num
+          elif [ $radartype = "VEL" ] && [[ $LDOPPLER = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date1}${hh1}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num2
+          fi
+          gzip -f ${OBSDIR3D}/${date1}${run1}${minute}_${num}_${radartype}.bfr.gz
+        fi
+
+        if [ -s ${OBSDIR3D}/${date2}${hh2}${minute}_${num}_${radartype}.bfr.gz ]; then
+          gunzip -f ${OBSDIR3D}/${date2}${run2}${minute}_${num}_${radartype}.bfr.gz
+          if [ $radartype = "DBZ" ] && [[ $LREFL = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date2}${hh2}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num
+          elif [ $radartype = "VEL" ] && [[ $LDOPPLER = ".TRUE." ]]; then
+            cat ${OBSDIR3D}/${date2}${hh2}${minute}_${num}_${radartype}.bfr >>${OBSDIR3D}/bufr.$num2
+          fi
+        fi
+      done
+    done
+    [ ! -s ${OBSDIR3D:='xxx'}/bufr.$num ] && rm -f ${OBSDIR3D:='xxx'}/bufr.$num
+    [ ! -s ${OBSDIR3D:='xxx'}/bufr.$num2 ] && rm -f ${OBSDIR3D:='xxx'}/bufr.$num2
+  done
+fi
+
+# surface observations -> LISTFILE1 -> OBSFILE1
+touch LISTFILE1
+
+ecflow_client --label=info "Surface OBS"
+if [ -s $OBSDIR3D/obsoul_1_xxxxxx_xx_${date}${run} ]; then
+  ls $OBSDIR3D/obsoul_1_xxxxxx_xx_${date}${run}  >> LISTFILE1
+elif [ -s $OBSDIR3D/obsoul_1_xxxxxx_xx_${date1}${hh1} ]; then
+  ls $OBSDIR3D/obsoul_1_xxxxxx_xx_${date1}${hh1}  >> LISTFILE1
+fi
+
+#if [ -s $OBSFILEZAMG ]; then
+#  ls $OBSFILEZAMG >> LISTFILE1
+#fi
+
+if [ -s $OBSFILE6 ]; then
+  ls $OBSFILE6 >> LISTFILE1
+fi
+
+# metar stations 
+if [[ $LMETAROBS = ".TRUE." ]] && [ -s $OBSFILE13 ]; then
+  ls $OBSFILE13 >> LISTFILE1
+fi
+
+# hydrological and environmental stations
+if [[ $LHYDROOBS = ".TRUE." ]] && [ -s $OBSFILE14 ]; then
+  ls $OBSFILE14 >> LISTFILE1
+fi
+
+# OPLACE national stations
+if [[ $LNATIONAL = ".TRUE." ]]; then
+  ecflow_client --label=info "National surface OBS"
+  countries="at cz sk si hu ro cr hr"
+  for cc in $countries ; do
+    if [ -s obsoul_1_xxxxxy_${cc}_${date}${run} ]; then
+      ls obsoul_1_xxxxxy_${cc}_${date}${run} >>LISTFILE1
+    fi
+    if [ -s obsoul_1_xxxxxy_${cc}_${date1}${hh1} ]; then
+      ls obsoul_1_xxxxxy_${cc}_${date1}${hh1} >>LISTFILE1
+    fi
+  done
+fi
+
+# wait for ZAMG observation file
+if [[ $LGPS = ".TRUE." ]] ; then
+  if [ -s ${PREGPSSOLRESULTFILE} ] ; then
+    ecflow_client --label=info "PREGPS"
+    ls ${PREGPSSOLRESULTFILE} >> LISTFILE1
+  fi
+  if [ -s ${PREGPSSOLRESULTFILE2} ] ; then
+    ecflow_client --label=info "PREGPS2"
+    ls ${PREGPSSOLRESULTFILE2} >> LISTFILE1
+  fi
+fi
+
+ecflow_client --label=info "Merging OBSFILES"
+$MERGEOBSBIN -obsoul  $OBSDIR3D/OBSFILE_1_${date}${run} -files LISTFILE1
+rm -f  $OBSDIR3D/obsoul_1_xxxxxx_xx_*
+
+# radio soundings -> LISTFILE2 -> OBSFILE5 
+touch LISTFILE2
+
+ecflow_client --label=info "Radiosoundings"
+if [ -s $OBSDIR3D/obsoul_5_xxxxxx_xx_${date}${run} ]; then
+  ls $OBSDIR3D/obsoul_5_xxxxxx_xx_${date}${run} >> LISTFILE2
+fi
+if [ -s $OBSFILE4 ]; then
+  ls $OBSFILE4 >> LISTFILE2
+fi
+if [ $LPSEUDO = ".TRUE." ]; then
+  if [ -s $OBSFILE4a ]; then
+    ls $OBSFILE4a >> LISTFILE2
+  fi
+fi
+
+ecflow_client --label=info "Merging OBSFILES radiosoundings"
+$MERGEOBSBIN -obsoul $OBSDIR3D/OBSFILE_5_${date}${run} -files LISTFILE2
+rm -f $OBSDIR3D/obsoul_5_xxxxxx_xx_*
+
+# amdar observations -> LISTFILE3 -> OBSFILE2 
+touch LISTFILE3
+
+# loop over assimilation window 0,-1h,+1h,-2h,+2h
+for asswin in ${date}${run} ${date1}${hh1} ${date2}${hh2} ${date3}${hh3} ${date4}${hh4}
+do
+  assdate=$(echo ${asswin} | cut -c 1-8)
+  asstime=$(echo ${asswin} | cut -c 9-10)
+
+  if [ -s $OBSDIR/obsoul_amdar_${assdate}_${asstime}0000.asc ]; then
+    ls $OBSDIR/obsoul_amdar_${assdate}_${asstime}0000.asc >> LISTFILE3
+  fi
+
+  if [ -s $OBSDIR3D/obsoul_2_xxxxxx_xx_${asswin} ]; then
+    ls $OBSDIR3D/obsoul_2_xxxxxx_xx_${asswin} >> LISTFILE3
+  fi
+
+  if [[ $LMODES = ".TRUE." ]]; then
+
+    if [[ -s ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin}.gz ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin}.gz
+      gunzip -f ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin}.gz
+      ls ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin} >> LISTFILE3
+    elif [[ -s ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin} ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin}
+      ls ${OBSDIR3D}/obsoul_2_ehs_eu_${asswin} >> LISTFILE3
+    fi
+
+#    if [[ -s ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin}.gz ]] ; then
+#      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin}.gz
+#      gunzip -f ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin}.gz
+#      ls ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin} >> LISTFILE3
+#    elif [[ -s ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin} ]] ; then
+#      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin}
+#      ls ${OBSDIR3D}/obsoul_2_ehs_nl_${asswin} >> LISTFILE3
+#    elif [ -s $OBSDIR/obsoul_MODES_${assdate}_${asstime}00_RUC ] ; then
+#      ls $OBSDIR/obsoul_MODES_${assdate}_${asstime}00_RUC >> LISTFILE3
+#    fi
+
+    if [[ -s ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin}.gz ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin}.gz
+      gunzip -f ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin}.gz
+      ls ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin} >> LISTFILE3
+    elif [[ -s ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin} ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin}
+      ls ${OBSDIR3D}/obsoul_2_ehs_dk_${asswin} >> LISTFILE3
+    fi
+
+    if [[ -s ${OBSDIR3D}/obsoul_2_mrar_si_${asswin}.gz ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_mrar_si_${asswin}.gz
+      gunzip -f ${OBSDIR3D}/obsoul_2_mrar_si_${asswin}.gz
+      ls ${OBSDIR3D}/obsoul_2_mrar_si_${asswin} >> LISTFILE3
+    elif [[ -s ${OBSDIR3D}/obsoul_2_mrar_si_${asswin} ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_mrar_si_${asswin}
+      ls ${OBSDIR3D}/obsoul_2_mrar_si_${asswin} >> LISTFILE3
+    fi
+    if [[ -s ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin}.gz ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin}.gz
+      gunzip -f ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin}.gz
+      ls ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin} >> LISTFILE3
+    elif [[ -s ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin} ]] ; then
+      chmod 777 ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin}
+      ls ${OBSDIR3D}/obsoul_2_mrar_cz_${asswin} >> LISTFILE3
+    fi
+  fi
+
+  if [[ $LMODESNATIONAL = ".TRUE." ]] ; then
+  if [ -s $OBSDIR/obsoul_MODES_aut_${assdate}_${asstime}00.asc ]; then
+    ls $OBSDIR/obsoul_MODES_aut_${assdate}_${asstime}00.asc >> LISTFILE3
+  fi
+fi
+
+done
+
+ecflow_client --label=info "Merging OBSFILES assimilation window"
+${MERGEOBSBIN} -obsoul $OBSDIR3D/OBSFILE_2_${date}${run} -files LISTFILE3
+rm -f $OBSDIR3D/obsoul_2_xxxxxx_xx_*
+rm -f $OBSDIR3D/obsoul_2_mrar_si_*
+
+# pilot and profiler observations -> LISTFILE4 -> OBSFILE6
+touch LISTFILE4
+## +0h
+if [ -s $OBSFILE5 ]; then
+  ls $OBSFILE5 >> LISTFILE4
+fi
+
+if [ -s $OBSFILE7 ]; then
+  ls $OBSFILE7 >> LISTFILE4
+fi
+
+#FW
+#ls $OBSDIR3D/obsoul_6_xxxxxx_xx_*
+#FW test
+
+# loop over assimilation window 0,-1h,+1h,-2h,+2h
+#for asswin in ${date}${run} ${date1}${hh1} ${date2}${hh2} ${date3}${hh3} ${date4}${hh4}
+#do
+#  if [ -s $OBSDIR3D/obsoul_6_xxxxxx_xx_${asswin} ]; then
+#    ls $OBSDIR3D/obsoul_6_xxxxxx_xx_${asswin} >> LISTFILE4
+#  fi
+#done
+
+ecflow_client --label=info "Merging pilot/profiler data"
+$MERGEOBSBIN -obsoul $OBSDIR3D/OBSFILE_6_${date}${run} -files LISTFILE4
+#rm -f  $OBSDIR3D/obsoul_6_xxxxxx_xx_*
+
+# merge all observation subgroups -> LISTFILE5 -> OBSFILEMERGED
+touch LISTFILE5
+
+[ -s $OBSDIR3D/OBSFILE_1_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_1_${date}${run} >>LISTFILE5
+[ -s $OBSDIR3D/OBSFILE_2_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_2_${date}${run} >>LISTFILE5
+[ -s $OBSDIR3D/OBSFILE_5_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_5_${date}${run} >>LISTFILE5
+[ -s $OBSDIR3D/OBSFILE_6_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_6_${date}${run} >>LISTFILE5
+
+ecflow_client --label=info "Merging everything"
+$MERGEOBSBIN -obsoul $OBSDIR3D/OBSFILEMERGED_${date}${run} -files LISTFILE5
+rm -f $OBSDIR3D/OBSFILE_1_${date}${run} $OBSDIR3D/OBSFILE_2_${date}${run} $OBSDIR3D/OBSFILE_5_${date}${run} $OBSDIR3D/OBSFILE_6_${date}${run}
+
+# MSG observations
+if [ -s $OBSDIR3D/grib_7_seviri_xx_${date}${run} ]; then
+ cp $OBSDIR3D/grib_7_seviri_xx_${date}${run} $OBSDIR3D/gribsevfile
+elif [ -s $OBSDIR3D/grib_7_seviri_xx_${date1}${hh1} ]; then   
+  cp $OBSDIR3D/grib_7_seviri_xx_${date1}${hh1} $OBSDIR3D/gribsevfile
+elif [ -s $OBSDIR3D/grib_7_seviri_xx_${date2}${hh2} ]; then
+  cp $OBSDIR3D/grib_7_seviri_xx_${date2}${hh2} $OBSDIR3D/gribsevfile
+elif [ -s $OBSDIR3D/grib_7_seviri_xx_${date3}${hh3} ]; then
+  cp $OBSDIR3D/grib_7_seviri_xx_${date3}${hh3} $OBSDIR3D/gribsevfile
+elif [ -s $OBSDIR3D/grib_7_seviri_xx_${date4}${hh4} ]; then
+  cp $OBSDIR3D/grib_7_seviri_xx_${date4}${hh4} $OBSDIR3D/gribsevfile
+fi
+
+if [ ! -s $OBSDIR3D/gribsevfile ]; then
+  echo "no MSG-file available - warning 41"
+  ecflow_client --label=info "No MSG-file available"
+fi 
+
+rm -f $OBSDIR3D/grib_7_seviri_xx_*
+
+if [ ! -s OBSFILEMERGED_${date}${run} ]; then
+  echo "no obsoul obsfile at all - warning 42"
+  ecflow_client --label=info "No obsoul OBS file available"
+fi
+
+rm -f ${BATOR3DIR}/ficdate
+echo "${ficleft}00" > ${BATOR3DIR}/ficdate
+echo "${ficright}00" >> ${BATOR3DIR}/ficdate
+#types_BASE='conv europro ascat geow iasi amsua amsub hirs sevb radarv'
+types_BASE='conv ascat geow iasi amsua amsub hirs sevb'
+#types_BASE='conv ascat geow' 
+#types_BASE='conv geow' 
+
+#base2merge='conv europro ascat geow iasi amsua amsub hirs sevb radarv'
+base2merge='conv ascat geow iasi amsua amsub hirs sevb'
+#base2merge='conv ascat geow'
+#base2merge='conv geow'
+
+export EC_PROFILE_HEAP=0
+export BATOR_NBPOOL=36
+export BATOR_NBSLOT=1
+export ODB_IO_METHOD=1
+export ODB_CMA=ECMA
+export ODB_STATIC_LINKING=1
+export BUFR_TABLES=${BUFRTABLES}
+export PRINT_TABLE_NAMES=${BUFRTABLES}
+
+#cy43
+export BATOR_WINDOW_LEN=180   # width of the temporal assimilation window (in minutes)
+export BATOR_WINDOW_SHIFT=-90 # shift of the temporal assimilation window relat
+export BATOR_SLOT_LEN=0       # width of a standard timeslot (in minutes)
+export BATOR_CENTER_LEN=0     # width of the centred timeslot ( in minutes)
+
+# create working directory
+
+RUNDIR=${BATOR3DIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+cp ${BATOR3DIR}/ficdate .
+cp ${IOASSIGNBIN} ./ioassign
+
+export ODB_FEBINPATH="."
+
+# Environment settings
+export NPROC=$EC_total_tasks
+export OMP_NUM_THREADS=1
+#export KMP_STACKSIZE=500m
+#export KMP_MONITOR_STACKSIZE=500m
+#export F_UFMTENDIAN="big:10,33,50,54,81"
+export DR_HOOK=0
+export DR_HOOK_SILENT=0
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+# ODB environment general settings
+export TO_ODB_ECMWF=0
+export TO_ODB_SWAPOUT=0
+export ODB_DEBUG=0
+export ODB_CTX_DEBUG=0
+export ODB_REPRODUCIBLE_SEQNO=2
+export ODB_STATIC_LINKING=1
+export ODB_IO_METHOD=1
+export ODB_ANALYSIS_DATE=$date
+export ODB_ANALYSIS_TIME=${run}0000
+export TIME_INIT_YYYYMMDD=$date
+export F_RECLUNIT=WORD
+export out_BASE=ECMA
+export ODB_ECMA_CREATE_POOLMASK=1
+export ODB_ECMA_POOLMASK_FILE=$RUNDIR/$out_BASE/ECMA.poolmask
+
+ecflow_client --label=info "Run Bator"
+cp -f $LIST_GPS ./list_gpssol
+for base in $types_BASE
+do
+   # ODB environment settings for BATOR
+   export IOASSIGN=$RUNDIR/IOASSIGN
+   export ODB_SRCPATH_ECMA=$RUNDIR/ECMA.${base}
+   export ODB_DATAPATH_ECMA=$RUNDIR/ECMA.${base}
+   export BATOR_LAMFLAG=1
+
+   mkdir $RUNDIR/ECMA.${base}
+
+   cp -f $NAMELBATOR3D NAMELIST
+   cp -f $NAMELRGB namelist_rgb
+   cp -f $NAMELLAMFLAG3D NAM_lamflag
+   cp -f $NAMELIASICHAN iasichannels
+   cp -f ${CLIMFILENAME_BATOR} param.cfg
+   cp -f ${CIOASSIGNBIN} ./create_ioassign
+   ecflow_client --label=info "Create IOASSIGN"
+   chmod 777 ./create_ioassign
+   ./create_ioassign -l${ODB_CMA} -n${BATOR_NBPOOL} >> ${LOGDIRBATOR}/CREATEIOASSIGN_3D_${base}_%ECF_TRYNO%.log 2>&1 
+
+   case ${base} in 
+        "conv")
+           if [[ -s $OBSDIR3D/OBSFILEMERGED_${date}${run} ]]; then
+             cp $OBSDIR3D/OBSFILEMERGED_${date}${run} OBSOUL.conv
+           fi
+           ;;
+        "europro")
+           if [[ -s $OBSDIR3D/bufr_6_${base} ]]; then
+             cp $OBSDIR3D/bufr_6_${base} BUFR.${base}
+           fi
+           ;;
+		"temp")
+           if [[ -s $OBSDIR3D/bufr.${base} ]] ; then
+             cp $OBSDIR3D/bufr.temp BUFR.${base}
+           fi
+           ;;
+        "sevb")
+           if [[ -s $OBSDIR3D/gribsevfile ]] 
+           then
+              cp $OBSDIR3D/gribsevfile GRIB.${base}
+           elif [[ -s $MF_OBSDIR/gribsevfile ]]
+           then
+              cp $MF_OBSDIR/gribsevfile GRIB.${base}
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi 
+           ;;
+        "geow")
+           if [[ -s $OBSDIR3D/bufr_3_geowind ]] 
+           then
+              cp $OBSDIR3D/bufr_3_geowind BUFR.geowind
+           elif [[ -s $MF_OBSDIR/bufr.geowind ]]
+           then
+              cp $MF_OBSDIR/bufr.geowind BUFR.geowind
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi 
+           ;;
+		"geow2")
+           if [[ -s $OBSDIR3D/bufr_3_geowind2 ]] ; then
+             cp $OBSDIR3D/bufr_3_geowind2 BUFR.geowind2
+           fi
+           ;;
+        "amsua"|"amsub")
+           if [[ -s $OBSDIR3D/bufr_7_${base} ]] 
+           then
+              cp $OBSDIR3D/bufr_7_${base} BUFR.tov${base}
+           elif [[ -s $MF_OBSDIR/bufr.tov${base} ]]
+           then
+              cp $MF_OBSDIR/bufr.tov${base} BUFR.tov${base}
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi 
+           ;;     
+        "hirs")
+           if [[ -s $OBSDIR3D/bufr_7_hirs ]] 
+           then
+               cp $OBSDIR3D/bufr_7_hirs BUFR.tovhirs
+           elif [[ -s $MF_OBSDIR/bufr.tovhirs ]]
+           then
+               cp $MF_OBSDIR/bufr.tovhirs BUFR.tovhirs
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi
+           ;;
+        "iasi2")
+           if [[ -s $OBSDIR3D/bufr_7_iasi ]]
+           then
+              cp $OBSDIR3D/bufr_7_iasi BUFR.${base}
+           elif [[ -s $OBSDIR3D/bufr.iasi ]]
+           then
+              cp $OBSDIR3D/bufr.iasi BUFR.${base}
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi
+           ;;
+        "iasi")
+           if [[ -s $OBSDIR3D/bufr_7_${base} ]]
+           then
+              cp $OBSDIR3D/bufr_7_${base} BUFR.${base}
+           elif [[ -s $OBSDIR3D/bufr.${base} ]]
+           then
+              cp $OBSDIR3D/bufr.${base} BUFR.${base}
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              continue
+           fi
+           ;;
+        "ascat"|"ssmis"|"ersuwi")
+           if [[ -s $OBSDIR3D/bufr.${base} ]]
+           then
+              cp $OBSDIR3D/bufr.${base} BUFR.${base}
+           else
+              base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+              echo $base2merge
+              continue
+           fi
+           ;;
+		"radarv")
+           for num in $RADARSTATIONS; do
+             (( num2=$num+1 ))
+             if [[ -s $OBSDIR3D/bufr.$num ]]; then
+               cp $OBSDIR3D/bufr.$num BUFR.$num
+             fi
+             if [[ -s $OBSDIR3D/bufr.$num2 ]]; then
+               cp $OBSDIR3D/bufr.$num2 BUFR.$num2
+             fi
+           done
+           ;;   
+   esac
+
+   cp ${BATORMAP3D}_${base} batormap
+
+   cp $BLACKLIST3 LISTE_LOC
+   cp $BLACKLIST2 LISTE_NOIRE_DIAP
+
+   /usr/bin/time -v mpiexec -n $NPROC $BATORBIN >> ${LOGDIRBATOR}/BATOR_3D_${base}_%ECF_TRYNO%.log 2>&1    
+   echo $?
+
+   cp IOASSIGN ECMA.${base}/IOASSIGN 
+   [ ! -f ECMA.${base}/ECMA.dd ] && rm -rf ECMA.${base}
+
+   rm -f batormap
+done
+
+tar cvf ecma_raw.tar ECMA.*
+
+# name of merged database
+out_BASE=ECMA
+export SWAPP_ODB_IOASSIGN=$RUNDIR/ioassign
+export ODB_SRCPATH_ECMA=$RUNDIR/$out_BASE
+export ODB_DATAPATH_ECMA=$RUNDIR/$out_BASE
+
+liste=""
+
+for base in $base2merge; do
+  liste=${liste}" -t "${base}
+done
+
+cp $MERGEBIN ./merge_ioassign
+
+ecflow_client --label=info "Merge IOASSIGN"
+./merge_ioassign -d $RUNDIR ${liste} > ${LOGDIRBATOR}/IOASSIGN_3D_%ECF_TRYNO%.log 2>&1 
+
+unset liste
+
+export IOASSIGN=$RUNDIR/$out_BASE/IOASSIGN
+export ODB_ECMA_CREATE_POOLMASK=1
+export ODB_ECMA_POOLMASK_FILE=$RUNDIR/$out_BASE/ECMA.poolmask
+export TIME_INIT_YYYYMMDD=$date
+export TIME_INIT_HHLMMSS=${run}0000
+
+# get number of pools
+na=`head -5 ${out_BASE}/ECMA.dd | tail -1`
+nb=1
+
+ln -s $SHUFFLEBIN shuffle
+
+ecflow_client --label=info "Shuffle"
+/usr/bin/time -v mpiexec -n 1 ./shuffle -i$out_BASE -o$out_BASE -b$nb -a$na > ${LOGDIRBATOR}/SHUFFLE_3D_%ECF_TRYNO%.log 2>&1
+
+# save merged bases (including sub bases)
+tar cvf ECMA_merged.tar $out_BASE ECMA.*
+mv ECMA_merged.tar ${BATOR3DODBFILE}
+cp $out_BASE/ECMA.dd ${BATOR3DIR}/ECMA.dd
+
+cd ${BATOR3DIR}
+
+rm -rf ${RUNDIR}
+
+%include <tail.h>
+

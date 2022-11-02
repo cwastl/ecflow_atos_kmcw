@@ -1,0 +1,54 @@
+# Script to run addsurf for assimilation
+
+%include <pbs.h>
+%include <head.h>
+
+module load cray-snplauncher
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+user=%USER%
+
+
+#################Run setup script for environment####################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem 999 $assimc $user
+#####################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+[[ ! -d ${ADDSURFDIR} ]] && mkdir -p ${ADDSURFDIR}
+
+RUNDIR=${ADDSURFDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+# MPI, openMP env, etc.
+export OMP_NUM_THREADS=1
+export MALLOC_CHECK_=0
+#export MALLOC_CHECK_=3
+#export F_RECLUNIT=BYTE
+export DR_HOOK=0
+export DR_HOOK_SILENT=0
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+# Get input data (ELSC*, namelist, binary, etc.)
+cp ${SSTEXDIR}/AROME_SSTOK ./fort.11
+cp ${C927DIR}/ADDSURFAROMALBC000 ./fort.12
+
+# Copy namelist
+cp ${NAMELADDSURF} fort.4
+
+ecflow_client --label=info "Addsurf"
+/usr/bin/time -v mpiexec ${BINADDSURF} 
+
+mv fort.11 ${ADDSURFRESULTFILE}
+
+cd ${ADDSURFDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

@@ -1,0 +1,37 @@
+%manual
+TASK:
+    claef/admin/dummy3
+
+DESCRIPTION:
+    This is a dummy task which controls C-LAEF 00 and 03 run triggering
+
+SOURCE:
+    '~zat/CLAEF/suite/scripts/dummy1.ecf'
+
+TRIGGER:
+    by the ecacesss job ~zat/CLAEF/include/ez_trigger.sh which is triggered by ECMWF LBC availability
+
+MAIN FRAME:
+    aa/ab/ac/ad (see variable SCHOST)
+
+OPERATOR:
+    - If the C-LAEF Runs are not yet started, complete this task
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <sbatch.h>
+%include <head.h>
+%include <ompi.h>
+
+echo "BC forecast for EZ 18 UTC run available, launch C-LAEF 00 and 03 UTC"
+ecflow_client --label=info "BC forecast for EZ 18 UTC run available, launch C-LAEF 00 and 03 UTC"
+
+ecflow_client --resume /%SUITE%/runs/RUN_00/dummy/ez_trigger/dummy1 
+ecflow_client --resume /%SUITE%/runs/RUN_03/dummy/ez_trigger/dummy1 
+
+%include <tail.h>

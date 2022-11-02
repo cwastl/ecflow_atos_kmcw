@@ -1,0 +1,33 @@
+%manual
+TASK:
+    claef/admin/complete
+
+DESCRIPTION:
+    This task sets suite complete (necessary to increase DATUM if something went wrong)
+
+SOURCE:
+    '~zat2/ecf/scripts_wasarchiv/complete.ecf'
+
+TRIGGER:
+    time dependency (01:40)
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+%end
+
+
+%include <pbs.h>
+%include <head.h>
+
+date=%ECF_DATE%
+sname=%SUITENAME%
+
+# report to ecflow
+ecflow_client --label=run "The date is ${date}"
+
+echo "Set suite "  ${sname} " complete"
+ecflow_client --label=info "Set suite " $sname " complete"
+ecflow_client --force=complete recursive /${sname}/runs
+
+%include <tail.h>

@@ -1,0 +1,271 @@
+# Script to run 001
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+lagg=%VORHI%
+couplfr=%KOPPLUNG%
+assimc=%ASSIMC%
+stophy=%STOCH%
+step15=%STEPS15%
+user=%USER%
+
+#####################Run setup script for environment##################
+. /home/ms/at/${user}/SCR/setup.ksh $run $date $mem $lagg $assimc $user
+#######################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+if [[ ${mem} == "00" ]]
+then
+   leadtime=%LEADCTL%
+else
+   leadtime=%LEAD%
+fi
+
+[[ ! -d ${C001DIR} ]] && mkdir -p ${C001DIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${C001DIR}/$PBS_JOBID
+echo $PBS_JOBID > ${C001DIR}/jobinfo.txt
+[[ ! -d ${RUNDIR} ]] && mkdir -p ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+NPROMA=-16
+NPROC=$EC_total_tasks
+NPRGPNS=18
+NPRGPEW=20
+NPRTRV=$NPRGPEW
+NPRTRW=$NPRGPNS
+NSTRIN=$NPROC
+NSTROUT=$NPROC
+
+month=`echo "$date" | awk '{print substr($1,5,2)}'`
+
+# MPI, openMP env, etc.
+
+#export OMP_NUM_THREADS=1
+#export KMP_STACKSIZE=500m
+#export KMP_MONITOR_STACKSIZE=500m
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+
+# fetch input files 
+
+if [ -s ${MINIMRESULTFILE} ] ; then
+   INITFILE_3D=${MINIMRESULTFILE}
+   INHYDRO=1
+   ecflow_client --label=info "Use minimization file"
+elif [ -s ${SSTEXANAFILE} ] ; then     # use ECMWF/ARPEGE as init
+   INITFILE_3D=${SSTEXANAFILE}
+   INHYDRO=-1 
+   ecflow_client --label=info "Use ECMWF file"
+elif [ -s ${FILE903} ] ; then     # use ECMWF/ARPEGE from 903 as init
+   INITFILE_3D=${FILE903}
+   INHYDRO=-1 
+   ecflow_client --label=info "Use ECMWF file from 903"
+else
+   echo "No INITFILE_3D found"
+   ecflow_client --label=error "No INITFILE_3D found"
+   exit 90
+fi
+
+if [ -s ${CANARIANAFILESURF} ] ; then            # if CANARI output is available
+   INITFILE_SFX=${CANARIANAFILESURF}
+   ecflow_client --label=info "Use canari file"
+elif [ -s ${SOILGUESSFILE1} ] ; then
+   INITFILE_SFX=${SOILGUESSFILE1}
+   ecflow_client --label=info "Use old soil file 1"
+elif [ -s ${SOILGUESSFILE2} ] ; then
+   INITFILE_SFX=${SOILGUESSFILE2}
+   ecflow_client --label=info "Use old soil file 2"
+elif [ -s ${SOILGUESSFILE3} ] ; then
+   INITFILE_SFX=${SOILGUESSFILE3}
+   ecflow_client --label=info "Use old soil file 3"
+elif [ -s ${SOILGUESSFILE4} ] ; then
+   INITFILE_SFX=${SOILGUESSFILE4}
+   ecflow_client --label=info "Use old soil file 4"
+elif [ -s ${C927SURFDIR}/PFE927${EXP}+0000.sfx ] ; then
+   INITFILE_SFX=${C927SURFDIR}/PFE927${EXP}+0000.sfx
+   ecflow_client --label=info "Use ECMWF soil"
+else
+   echo "No INITFILE_SFX found"
+   ecflow_client --label=error "No INITFILE_SFX found"
+   exit 91
+fi
+
+if [[ -s ${PGDFILE_FA} ]]; then
+   INITFILE_SURFACE=${PGDFILE_FA}
+else
+   INITFILE_SURFACE=${CLIMDIR}/PGD_${EXP}.fa
+fi
+
+ln -sf ${C927DIR}/ELSC*${EXP}* .
+ln -sf ${INITFILE_3D} ICMSH${EXP}INIT
+
+ln -sf ICMSH${EXP}INIT ./ELSCF${EXP}ALBC000
+ln -sf ${INITFILE_SFX} ICMSH${EXP}INIT.sfx #nka
+ln -sf ${INITFILE_SURFACE} Const.Clim.sfx    #nka
+ln -sf ${CLIMFILENAME_AROME}${month} Const.Clim
+
+ln -sf ${ECOCLIMAPI} . #cy40
+ln -sf ${ECOCLIMAPII} . #cy40
+ln -sf ${CLIMDIR}/RADRRTM . #cy40 
+ln -sf ${CLIMDIR}/GCO2CLIM . #cy40 
+ln -sf ${CLIMDIR}/GCH4CLIM . #cy40 
+ln -sf ${CLIMDIR}/N2OCLIM . #cy40 
+ln -sf ${CLIMDIR}/NO2CLIM . #cy40 
+ln -sf ${CLIMDIR}/C11CLIM . #cy40 
+ln -sf ${CLIMDIR}/C12CLIM . #cy40 
+ln -sf ${CLIMDIR}/GOZOCLIM . #cy40 
+ln -sf ${CLIMDIR}/C22CLIM . #cy40 
+ln -sf ${CLIMDIR}/CCL4CLIM . #cy40 
+ln -sf ${CLIMDIR}/RADSRTM . #cy40 
+ln -sf ${CLIMDIR}/ECOZC . #cy40 
+
+ln -sf ${NAMEL001SURFEX} EXSEG1.nam
+
+# run 001
+#-------------------------------------
+
+couplfr_s=`expr ${couplfr} \* 3600`
+date2=$( echo $date | cut -c7-8 )
+
+if [[ ${mem} == "00" ]]
+then
+   seedm=0
+   NAMELS1=${NAMELSELECTCTL}
+else
+   seedm=`expr ${mem} \* ${date2}`
+   NAMELS1=${NAMELSELECT}
+fi
+
+# create links and inline fpos xtt
+typeset -i act_step_dd act_step_hh act_step_min
+act_step_hh=0
+act_step_hh2=0
+act_step_min=0
+act_step_dd=0
+
+if [[ ${step15} == 1 ]]
+then 
+  steps=15
+else
+  steps=60
+fi
+
+while (( ${act_step_hh2} <= ${leadtime} ))
+do
+
+  cact_step_hh=$(printf "%%02d" $act_step_hh)
+  cact_step_min=$(printf "%%02d" $act_step_min)
+  cact_step_dd=$(printf "%%04d" $act_step_dd)
+  cact_step="${cact_step_dd}${cact_step_hh}$cact_step_min"
+
+  if [[ "$cact_step_min" == "00" ]]
+  then
+
+    ln -sf ${NAMELS1} ${RUNDIR}/xxt$cact_step
+
+    if [[ "$cact_step_hh" == "00" ]]
+    then
+
+      grep -v $RUNDIR/CLCFU xxt00000000  >  $RUNDIR/xxt00000000_
+      grep -v $RUNDIR/CLDCFU xxt00000000_ > $RUNDIR/xxt00000000__
+      rename  $RUNDIR/xxt00000000__  $RUNDIR/xxt00000000 $RUNDIR/xxt00000000__
+
+    fi
+
+  else
+
+    ln -sf ${NAMELSELECT15} $RUNDIR/xxt$cact_step
+
+  fi
+ 
+  act_step_min=$act_step_min+$steps
+
+  (( $act_step_min == 60 )) && { act_step_hh=$act_step_hh+1; act_step_min=0; act_step_hh2=$act_step_hh2+1; }
+  (( $act_step_hh == 24 )) && { act_step_dd=$act_step_dd+1; act_step_hh=0; }
+  (( $act_step_hh2 == ${leadtime} && $act_step_min > 0 )) && break
+
+done
+
+if [[ $mem == "00" || $stophy == 0 ]]
+then 
+   
+  sed -e   "s/{nproma}/$NPROMA/"\
+      -e   "s/{experiment}/${EXP}/"\
+      -e   "s/{nproc}/$NPROC/"\
+      -e   "s/{nprgpns}/$NPRGPNS/"\
+      -e   "s/{nprgpew}/$NPRGPEW/"\
+      -e   "s/{nprtrv}/$NPRTRV/"\
+      -e   "s/{nprtrw}/$NPRTRW/"\
+      -e   "s/{nstrin}/$NSTRIN/"\
+      -e   "s/{nstrout}/$NSTROUT/"\
+      -e   "s/LSPSDT=.TRUE./LSPSDT=.FALSE./"\
+      -e   "s/{couplfreq}/${couplfr_s}/"\
+      -e   "s/{inhydro}/${INHYDRO}/"\
+      -e   "s/NSEED_SDT=60/NSEED_SDT=${seedm}/"\
+      -e   "s/NFRPOS=60,/NFRPOS=${steps},/"\
+      -e   "s/ ! CNPPATH='.',/  CNPPATH='.',/"\
+      -e   "s/{fcstrange}/${leadtime}/g" ${NAMEL001} > $RUNDIR/fort.4
+
+else
+
+  sed -e   "s/{nproma}/$NPROMA/"\
+      -e   "s/{experiment}/${EXP}/"\
+      -e   "s/{nproc}/$NPROC/"\
+      -e   "s/{nprgpns}/$NPRGPNS/"\
+      -e   "s/{nprgpew}/$NPRGPEW/"\
+      -e   "s/{nprtrv}/$NPRTRV/"\
+      -e   "s/{nprtrw}/$NPRTRW/"\
+      -e   "s/{nstrin}/$NSTRIN/"\
+      -e   "s/{nstrout}/$NSTROUT/"\
+      -e   "s/{couplfreq}/${couplfr_s}/"\
+      -e   "s/{inhydro}/${INHYDRO}/"\
+      -e   "s/NSEED_SDT=60/NSEED_SDT=${seedm}/"\
+      -e   "s/NFRPOS=60,/NFRPOS=${steps},/"\
+      -e   "s/ ! CNPPATH='.',/  CNPPATH='.',/"\
+      -e   "s/{fcstrange}/${leadtime}/g" ${NAMEL001} > $RUNDIR/fort.4
+
+fi  
+
+ecflow_client --label=info "Run 001"
+ecflow_client --event=e
+
+/usr/bin/time -v aprun -n $NPROC ${BINMASTER} > ${LOGDIR}/MASTERODB_${mem}.log 2>&1
+
+rename NODE.001_01 ${LOGDIR}/NODE.001_01_${mem} NODE.001_01
+
+#ii=0                        #For B-Matrix calculation
+#mkdir -p /scratch/ms/at/kmcw/CLAEF/BMATRIX/${date}/${run}/MEM_${mem}
+#while [ $ii -le 6 ]
+#do
+#   cp ICMSH${EXP}+000${ii}:00 /scratch/ms/at/kmcw/CLAEF/BMATRIX/${date}/${run}/MEM_${mem}/ICMSH${EXP}+000${ii}
+#   cp ICMSH${EXP}+000${ii}:00.sfx /scratch/ms/at/kmcw/CLAEF/BMATRIX/${date}/${run}/MEM_${mem}/ICMSH${EXP}+000${ii}.sfx
+#   let "ii = $ii + 3"
+#done
+
+ii=0                       #For assimilation cycle
+while [ $ii -le ${leadtime} ]
+do
+   jj=$(printf "%%02d" $ii)
+   rename ICMSH${EXP}+00${jj}:00 ${C001DIR}/ICMSH${EXP}+00${jj} ICMSH${EXP}+00${jj}:00
+   rename ICMSH${EXP}+00${jj}:00.sfx ${C001DIR}/ICMSH${EXP}+00${jj}.sfx ICMSH${EXP}+00${jj}:00.sfx
+   let "ii = $ii + $assimc"
+done
+
+#rename PF ${C001DIR}/PF PF${EXP}${EXP}+*
+cp PF${EXP}${EXP}+* ${C001DIR}
+
+cd ${C001DIR}
+
+%include <tail.h>

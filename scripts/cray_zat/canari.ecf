@@ -1,0 +1,300 @@
+%manual
+TASK:
+    claef/runs/RUN_[HH]/main/MEM_[MM]/canari
+
+    [HH]=00,03,06,09,12,15,18,21; [MM]=00,01,..,16
+
+DESCRIPTION:
+    This task does optimal interpolation for surface data assimilation
+
+SOURCE:
+    '~zat/CLAEF/scripts/canari.ecf'
+
+TRIGGER:
+    :ASSIM == 1 and claef/runs/RUN_[HH]/main/MEM_[MM]/screensurf == complete
+
+COMPLETE:
+    :ASSIM == 0     !run this member without data assimilation
+    :ASSIM == 1 and claef/runs/RUN_[HH]/obs/getobs:obsprog == 0    !too less observations available
+
+MAIN FRAME:
+    cca/ccb (see variable SCHOST)
+
+OPERATOR:
+    - If this task fails, rerun the task
+    - If failure persists, set task == complete (run without surface data assimilation)
+    - Please report the error:
+      Every day between 6-20 UTC please call:
+      1.) +436648409158, Mr. Clemens Wastl
+      2.) +436802040400, Mr. Florian Weidle
+      3.) +436767085070, Mr. Christoph Wittmann
+      - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
+%end
+
+%include <pbs_mem1.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+mem=%MEMBER%
+assimc=%ASSIMC%
+seda=%SEDA%
+files=%STHOST%
+user=%USER%
+
+set +e
+
+############################Run setup script for environment##############################
+. /${files}/home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user $files
+##########################################################################################
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+# Environmental settings
+module load cray-snplauncher
+
+[[ ! -d ${CANARIDIR} ]] && mkdir -p ${CANARIDIR}
+[[ ! -d ${LOGDIR} ]] && mkdir -p ${LOGDIR}
+
+RUNDIR=${CANARIDIR}/$PBS_JOBID
+[[ ! -d ${RUNDIR} ]] && mkdir ${RUNDIR}
+cd ${RUNDIR}
+
+rm -fr ${RUNDIR}/*
+
+MM=$(echo ${date} | cut -c 5-6)
+DD=$(echo ${date} | cut -c 7-8)
+
+if [ ${DD} -le 15 ] ; then
+  M2=$(($MM - 1)) 
+  [ ${M2} -eq 0 ]  && M2=12
+fi
+
+if [ ${DD} -gt 15 ] ; then
+  M2=$(($MM + 1)) 
+  [ ${M2} -eq 13 ] && M2=1
+fi
+
+[ ${M2} -lt 10 ] && M2=0${M2}
+
+CLIMFILE1=${CLIMFILENAME_AROME}${MM}
+CLIMFILE2=${CLIMFILENAME_AROME}${M2}
+
+[[ -s ${OBSDIR}/laketemperatures_${date}.txt ]] && cp ${OBSDIR}/laketemperatures_${date}.txt ./laketemperatures.txt
+#[[ -s ${OBSDIR}/ELSCFAROMALBC000_snow_$date ]] && cp ${OBSDIR}/ELSCFAROMALBC000_snow_$date ./snow_sat
+[[ -s ${OBSDIR}/ELSCFAR33ALBC000_snow_$date ]] && cp ${OBSDIR}/ELSCFAR33ALBC000_snow_$date ./snow_mod
+
+# MPI, openMP env, etc.
+#-----------------------
+export PSM2_RANKS_PER_CONTEXT=2
+
+export MPI_DSM_CPULIST="0-35:allhosts"
+export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_VERBOSE=1
+
+export MPI_MEM_ALIGN=128
+export MPI_BUFFER_MAX=2000000
+export MPI_BUFS_PER_PROC=1024
+export MPI_REQUEST_MAX=400000
+
+export MKL_DYNAMIC=FALSE
+export F_UFMTENDIAN=big
+export FORT_BUFFERED=true
+export FORT_BLOCKSIZE=1048576
+
+export OMP_NUM_THREADS=1
+export OMP_DYNAMIC=FALSE
+export KMP_STACKSIZE=500m
+export KMP_MONITOR_STACKSIZE=500m
+export KMP_AFFINITY=disabled
+
+export DR_HOOK=0
+export DR_HOOK_SILENT=1
+export DR_HOOK_IGNORE_SIGNALS=-1
+export EC_PROFILE_HEAP=0
+
+#My environment
+export NSLOTS=$EC_total_tasks
+
+# --- Create working directory
+export NPROMA=-32
+export NPROC=$NSLOTS
+
+export NPOOLS=$NPROC
+
+export NEINI=0
+
+export NCONF=701
+export CNMEXPB=CYCL
+export TSTEP_701=1.
+export NSTOP=t0
+
+export TO_ODB_ECMWF=0
+export ODB_SRCPATH_ECMA=$RUNDIR/ECMA
+export ODB_DATAPATH_ECMA=$RUNDIR/ECMA
+export ODB_TRACE_FILE=${CANARIDIR}/listing_odb
+
+export EC_PROFILE_HEAP=0
+export ODB_IO_METHOD=1
+export IOASSIGN=IOASSIGN
+export ODB_CMA=ECMA
+export ODB_STATIC_LINKING=1
+export ODB_MERGEODB_DIRECT=1
+
+LINILAKE=.FALSE.
+LINISNOW=.FALSE.
+LINISNOW2=.FALSE.
+[[ -s ./snow_sat ]] && LINISNOW=".TRUE."
+[[ -s ./snow_mod ]] && LINISNOW2=".TRUE."
+[[ -s ./laketemperatures.txt ]] && LINILAKE=".TRUE."
+sed -e "s/{LINILAKE}/${LINILAKE}/g" ${NAMELOIMAIN} >./EXSEG1.nam
+
+#if [[ ${mem} == "00" || ${seda} -eq 0 ]]
+if [[ ${seda} -eq 0 ]]
+then
+
+  cp ${BATORODBFILE} ./ecma_raw.tar
+  tar xvf ecma_raw.tar
+  ln -s ECMA.IOASSIGN IOASSIGN
+  ln -s ECMA.IOASSIGN IOASSIGN.ECMA
+
+else
+  cp ${SCREENSURFRESULTFILE} ./ecma_raw.tar
+  tar xvf ecma_raw.tar
+  ln -s ECMA/ECMA.IOASSIGN IOASSIGN
+  ln -s ECMA/ECMA.IOASSIGN IOASSIGN.ECMA
+
+fi
+
+cp ${CLIMDIR}/POLYNOMES.ISBA fort.61
+
+cp ${ADDSURFRESULTFILE} guess
+
+status1=0                         
+if [[ $LINISNOW == ".TRUE." ]] ; then
+  ecflow_client --label=info "Assim satellite snow"
+  cp guess guess1                  
+  ### create namelist for using satellite snow"
+  echo "&NAMBLENDSUR" >  fort.4
+  echo "   I_NDEBUG=1" >>  fort.4
+  echo "   CL_FNAME1='snow_sat'," >> fort.4
+  echo "   CL_FNAME2='guess1'," >> fort.4
+  echo "   CL_FNAME3='guess'," >> fort.4
+  echo "   I_NVARB=1," >> fort.4
+  echo "   I_NVARC=0," >> fort.4
+  echo "   CL_CVARB(1)='SURFRESERV.NEIGE'," >>fort.4
+  echo "   /" >> fort.4
+  echo "&NAMDYNCORE" >> fort.4
+  echo "   /" >> fort.4
+  echo "&NAMSCEN" >> fort.4
+  echo "   /" >> fort.4
+
+  /usr/bin/time -v mpiexec -n $NSLOTS ${BINSNOWGRID3} > ${LOGDIR}/SNOWGRID3_%ECF_TRYNO%_${mem}.log 2>&1
+  status1=$?
+  if (( $status1 != 0 )) && (( $status1 != 137 )) 
+  then
+      mv guess1 guess
+  fi    
+  mv fort.4 namelist_snowgrid1
+fi
+
+status11=0
+if [[ ${LINISNOW2} == ".TRUE." ]] ; then
+  ecflow_client --label=info "Assim model snow"
+  cp guess guess2
+  ### create namelist for using snowgrid model snow"
+  echo "&NAMBLENDSUR" >  fort.4
+  echo "   I_NDEBUG=1" >>  fort.4
+  echo "   CL_FNAME1='snow_mod'," >> fort.4
+  echo "   CL_FNAME2='guess2'," >> fort.4
+  echo "   CL_FNAME3='guess'," >> fort.4
+  echo "   I_NVARB=1," >> fort.4
+  echo "   I_NVARC=0," >> fort.4
+  echo "   CL_CVARB(1)='SURFRESERV.NEIGE'," >>fort.4
+  echo "   /" >> fort.4
+  echo "&NAMDYNCORE" >> fort.4
+  echo "   /" >> fort.4
+  echo "&NAMSCEN" >> fort.4
+  echo "   /" >> fort.4
+
+  /usr/bin/time -v mpiexec -n $NSLOTS ${BINSNOWGRID4} > ${LOGDIR}/SNOWGRID4_%ECF_TRYNO%_${mem}.log 2>&1
+  status11=$?                                                 
+  if (( $status11 != 0 )) && (( $status11 != 137 ))
+  then    
+      mv guess2 guess
+  fi    
+  mv fort.4 namelist_snowgrid2
+fi  
+
+sed -e "s/{NPROC}/${NPROC}/" \
+    -e "s/{NPROMA}/${NPROMA}/" \
+    -e "s/{NEINI}/${NEINI}/" \
+    -e "s/{TSTEP_701}/${TSTEP_701}/"\
+    -e "s/{CNMEXPB}/${CNMEXPB}/"\
+    -e "s/{NSTOP}/${NSTOP}/" ${NAMELCANARI} > fort.4
+
+cp ${CLIMDIR}/const_cy43t2.tar.gz .
+tar -xzvf const_cy43t2.tar.gz
+
+cp ${ECOCLIMAPI} .
+cp ${ECOCLIMAPII} .
+
+ln -s guess ICMSHCYCLINIT
+ln -s guess ELSCFCYCLALBC000
+ln -s guess ELSCFANALALBC000
+ln -s guess ICMSHANALINIT
+
+cp ${CLIMFILE1} ICMSHCYCLCLIM
+cp ${CLIMFILE2} ICMSHCYCLCLI2
+
+cp ${PGDFILE_FA} Const.Clim.sfx
+
+try_guess=1
+found=0
+while (( $try_guess <= 12 )) && (( $found < 1 )) # loop through all possible guessfiles
+do
+   ecflow_client --label=info "Try guess file ${try_guess}"
+   eval "actfile=\$SOILGUESSFILE${try_guess}"
+
+   if [ -s ${actfile} ]
+   then
+      found=1
+      cp ${actfile} ICMSHCYCLINIT.sfx
+      cp ICMSHCYCLINIT.sfx ICMSHCYCL+0000.sfx
+      try_guess=20
+   fi
+
+   let "try_guess = $try_guess+1"
+
+done
+ 
+export IOASSIGN=IOASSIGN
+export ODB_ANALYSIS_DATE=$date
+export ODB_ANALYSIS_TIME=${run}0000
+export BASETIME=${date}${run}
+export ODB_SRCPATH_ECMA=$RUNDIR/ECMA
+export ODB_DATAPATH_ECMA=$RUNDIR/ECMA
+export ODB_MERGEODB_DIRECT=1
+export ODB_ECMA_CREATE_POOLMASK=1
+export ODB_ECMA_POOLMASK_FILE=$RUNDIR/ECMA/ECMA.poolmask
+export TRACEBK=0
+export F_RECLUNIT=BYTE
+export F_UFMTENDIAN="big:10,33,50,54,81"
+
+ecflow_client --label=info "Canari"
+/usr/bin/time -v mpiexec -n $NSLOTS ${BINMASTER} > ${LOGDIR}/CANARI_%ECF_TRYNO%_${mem}.log 2>&1
+
+export F_RECLUNIT=WORD
+# distribute output 
+#cp IOASSIGN.ECMA ECMA
+tar cvf ECMA.tar ECMA
+mv ECMA.tar ${CANARIDIR}/ECMA.tar
+mv NODE.001_01 ${LOGDIR}/NODE_CANARI_${date}${run}_%ECF_TRYNO%_${mem}
+mv ICMSHCYCL+0000 ${CANARIANAFILE}
+mv ICMSHCYCL+0000.sfx ${CANARIANAFILESURF}
+
+cd ${CANARIDIR}
+rm -rf ${RUNDIR}
+
+%include <tail.h>

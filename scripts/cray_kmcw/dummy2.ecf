@@ -1,0 +1,16 @@
+#This is a dummy task which is only launched if important parts of the suite are delayed or went wrong. This task runs at specific times, but it is usually
+#set complete by the families lbc, obs and main.
+
+%include <pbs.h>
+%include <head.h>
+
+date=%DATUM%
+run=%LAUF%
+
+# report to ecflow
+ecflow_client --label=run "The date is now ${date} ${run}"
+
+echo "Something went wrong with C-LAEF ${run}"
+ecflow_client --label=error "Something went wrong with C-LAEF ${run}"
+
+%include <tail.h>
