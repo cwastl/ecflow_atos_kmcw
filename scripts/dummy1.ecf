@@ -32,7 +32,6 @@ OPERATOR:
 
 date=%DATUM%
 run=%LAUF%
-files=%STHOST%
 user=%USER%
 
 # report to ecflow
