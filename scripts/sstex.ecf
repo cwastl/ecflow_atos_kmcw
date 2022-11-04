@@ -34,7 +34,7 @@ OPERATOR:
 
 %include <sbatch.h>
 %include <head.h>
-%include <intel.h>
+%include <ompi.h>
 
 date=%DATUM%
 run=%LAUF%

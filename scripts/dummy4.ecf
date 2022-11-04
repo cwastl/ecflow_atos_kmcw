@@ -6,7 +6,7 @@ DESCRIPTION:
     This is a dummy task which controls C-LAEF 00 and 03 run triggering
 
 SOURCE:
-    '~zat/CLAEF/suite/scripts/dummy1.ecf'
+    '~zat/CLAEF/suite/scripts/dummy4.ecf'
 
 TRIGGER:
     by the ecacesss job ~zat/CLAEF/include/ez_trigger.sh which is triggered by ECMWF LBC availability

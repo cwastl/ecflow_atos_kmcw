@@ -125,6 +125,9 @@ ectrans -gateway ecaccess.zamg.ac.at -remote ${fectrans} -get -source /TU_GNSS/A
 ectrans -gateway ecaccess.zamg.ac.at -remote ${fectrans} -get -source /TU_GNSS/ARCHIVE/${date1}/OBSOUL_TUAT_${date1}${hh1}00.plusproch -overwrite -verbose
 ectrans -gateway ecaccess.zamg.ac.at -remote ${fectrans} -get -source /EGVAP/OBSOUL/OBSOUL_EGVAP_${date1}${hh1}00.plusproch -overwrite -verbose
 
+#BUFRTEMP
+ectrans -gateway ecaccess.zamg.ac.at -remote ${fectrans} -get -source /../../modelle/prod/mgruppe/OBS/ODB/${date}/bufr.temp_${date}${run} -overwrite -verbose
+
 if [[ ${TRANSOK} -ge 1 ]]
 then
    echo "observations available"

@@ -33,7 +33,7 @@ OPERATOR:
 
 %include <sbatch_mem1.h>
 %include <head.h>
-%include <intel.h>
+%include <ompi.h>
 %include <job_geometry.h>
 
 date=%DATUM%

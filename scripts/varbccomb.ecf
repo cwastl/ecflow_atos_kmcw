@@ -47,6 +47,8 @@ user=%USER%
 . /home/${user}/CLAEF/SCR/setup_cy43.ksh $run $date $mem 999 $assimc $user
 ##########################################################################
 
+set +e
+
 # report to ecflow
 ecflow_client --label=run "The date is now ${date} ${run}"
 

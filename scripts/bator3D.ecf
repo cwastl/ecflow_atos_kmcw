@@ -34,7 +34,7 @@ OPERATOR:
 
 %include <sbatch.h>
 %include <head.h>
-%include <intel.h>
+%include <ompi.h>
 %include <job_geometry.h>
 
 date=%DATUM%
@@ -136,6 +136,23 @@ if (( $flag>0 )) ; then
   cat bufr_7_mhs >> bufr_7_amsub
   rm -f bufr_7_mhs
   
+  #### BUFR TEMPS #############
+  rm -f ${OBSDIR3D}/bufr.temp
+  #touch ${OBSDIR3D}/bufr.temp
+  if [[ -s ${OBSDIR3D}/bufr.temp_${date}${run} ]]
+  then
+     cat ${OBSDIR3D}/bufr.temp_${date}${run} >>${OBSDIR3D}/bufr.temp
+     __MONITOR__ "TEMP" ${OBSDIR3D}/bufr.temp_${date}${run}
+  elif [[ -s ${OBSDIR3D}/bufr.temp_${date1}${hh1} ]]
+  then
+     cat ${OBSDIR3D}/bufr.temp_${date1}${hh1} >>${OBSDIR3D}/bufr.temp
+     __MONITOR__ "TEMP" ${OBSDIR3D}/bufr.temp_${date1}${hh1}
+  elif [[ -s ${OBSDIR3D}/bufr.temp_${date2}${hh2} ]]
+  then
+     cat ${OBSDIR3D}/bufr.temp_${date2}${hh2} >>${OBSDIR3D}/bufr.temp
+     __MONITOR__ "TEMP" ${OBSDIR3D}/bufr.temp_${date2}${hh2}
+  fi
+ 
   touch bufr_6_europro
   gunzip -f bufr_6_wp_xxxx_??????????.gz
   cat bufr_6_wp_xxxx_?????????? >>bufr_6_europro
@@ -499,7 +516,13 @@ touch LISTFILE5
 
 [ -s $OBSDIR3D/OBSFILE_1_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_1_${date}${run} >>LISTFILE5
 [ -s $OBSDIR3D/OBSFILE_2_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_2_${date}${run} >>LISTFILE5
-[ -s $OBSDIR3D/OBSFILE_5_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_5_${date}${run} >>LISTFILE5
+#[ -s $OBSDIR3D/OBSFILE_5_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_5_${date}${run} >>LISTFILE5
+
+# If we do not have bufr.temp available use the ascii temp files
+if [[ -s ${OBSDIR3D}/OBSFILE_5_${date}${run} ]] && [[ ! -s ${OBSDIR3D}/bufr.temp ]] ; then
+   ls  ${OBSDIR3D}/OBSFILE_5_${date}${run} >>LISTFILE5
+fi
+
 [ -s $OBSDIR3D/OBSFILE_6_${date}${run} ] && ls  $OBSDIR3D/OBSFILE_6_${date}${run} >>LISTFILE5
 
 ecflow_client --label=info "Merging everything"
@@ -535,12 +558,12 @@ rm -f ${BATOR3DIR}/ficdate
 echo "${ficleft}00" > ${BATOR3DIR}/ficdate
 echo "${ficright}00" >> ${BATOR3DIR}/ficdate
 #types_BASE='conv europro ascat geow iasi amsua amsub hirs sevb radarv'
-types_BASE='conv ascat geow iasi amsua amsub hirs sevb'
+types_BASE='conv temp ascat geow iasi amsua amsub hirs sevb'
 #types_BASE='conv ascat geow' 
 #types_BASE='conv geow' 
 
 #base2merge='conv europro ascat geow iasi amsua amsub hirs sevb radarv'
-base2merge='conv ascat geow iasi amsua amsub hirs sevb'
+base2merge='conv temp ascat geow iasi amsua amsub hirs sevb'
 #base2merge='conv ascat geow'
 #base2merge='conv geow'
 
@@ -630,9 +653,6 @@ do
            if [[ -s $OBSDIR3D/gribsevfile ]] 
            then
               cp $OBSDIR3D/gribsevfile GRIB.${base}
-           elif [[ -s $MF_OBSDIR/gribsevfile ]]
-           then
-              cp $MF_OBSDIR/gribsevfile GRIB.${base}
            else
               base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
               continue
@@ -642,9 +662,6 @@ do
            if [[ -s $OBSDIR3D/bufr_3_geowind ]] 
            then
               cp $OBSDIR3D/bufr_3_geowind BUFR.geowind
-           elif [[ -s $MF_OBSDIR/bufr.geowind ]]
-           then
-              cp $MF_OBSDIR/bufr.geowind BUFR.geowind
            else
               base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
               continue
@@ -659,9 +676,6 @@ do
            if [[ -s $OBSDIR3D/bufr_7_${base} ]] 
            then
               cp $OBSDIR3D/bufr_7_${base} BUFR.tov${base}
-           elif [[ -s $MF_OBSDIR/bufr.tov${base} ]]
-           then
-              cp $MF_OBSDIR/bufr.tov${base} BUFR.tov${base}
            else
               base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
               continue
@@ -671,9 +685,6 @@ do
            if [[ -s $OBSDIR3D/bufr_7_hirs ]] 
            then
                cp $OBSDIR3D/bufr_7_hirs BUFR.tovhirs
-           elif [[ -s $MF_OBSDIR/bufr.tovhirs ]]
-           then
-               cp $MF_OBSDIR/bufr.tovhirs BUFR.tovhirs
            else
               base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
               continue
@@ -724,6 +735,14 @@ do
              fi
            done
            ;;   
+         "temp")
+           if [[ -s {OBSDIR3D}/bufr.${base} ]] ; then
+             cp {OBSDIR3D}/bufr.temp BUFR.${base}
+           else
+             base2merge=$( echo $base2merge | sed -e "s/ *$base */ /" )
+             continue
+           fi
+           ;;  
    esac
 
    cp ${BATORMAP3D}_${base} batormap

@@ -30,7 +30,7 @@ OPERATOR:
       - Please report to: claef_timecrit_mgmt@lists.ecmwf.int
 %end
 
-%include <sbatch.h>
+%include <sbatch_openmp.h>
 %include <head.h>
 %include <ompi.h>
 %include <mpi.h>

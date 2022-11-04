@@ -246,7 +246,7 @@ if [ ${leadtime} -gt ${assimc} ]; then
 #  then
  
 ecflow_client --label=info "Copying sfx file"
-ectrans -gateway ecaccess.zamg.ac.at -remote ${fectrans} -put -source ${C001DIR}/ICMSH${EXP}+0000.sfx -target /../../CLAEF/PRODUCTION/SOILANA/ICMSHAROM+0000_${mem}.sfx -overwrite -verbose
+ectrans -gateway ecaccess.zamg.ac.at -remote ment_arch -put -source ${C001DIR}/ICMSH${EXP}+0000.sfx -target /CLAEF/PRODUCTION/SOILANA/ICMSHAROM+0000_${mem}.sfx -overwrite -verbose
    
 #  fi
 
