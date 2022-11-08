@@ -296,7 +296,6 @@ def family_main():
       Edit(
          ASSIM=assimi,
          LEADT=fcst,
-         SEDA=seda,
          PERTS=pertsurf,
          ARCHIV=arch,
          TRANSF=trans),
@@ -423,6 +422,7 @@ def family_main():
                      NPRGPNS=1,
                      NPRGPEW=1,
                      CLASS='nf',
+                     SEDA=seda,
                      NAME="screensurf{:02d}".format(mem),
                   ),
                   Label("run", ""),
@@ -442,7 +442,6 @@ def family_main():
                      NPRGPNS=1,
                      NPRGPEW=1,
                      CLASS='nf',
-                     SEDA=seda,
                      NAME="canari{:02d}".format(mem),
                   ),
                   Label("run", ""),
@@ -493,9 +492,9 @@ def family_main():
                   Event("e"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
-                     NP=384,
-                     NPRGPNS=16,
-                     NPRGPEW=24,
+                     NP=96,
+                     NPRGPNS=8,
+                     NPRGPEW=12,
                      CLASS='np',
                      STOCH=stophy,
                      PERTSU=pertsurf,
@@ -707,7 +706,7 @@ defs = Defs().add(
                 ),
 
                 Family("RUN_12",
-                   Edit( LAUF='12',VORHI=6, LEAD=fcst, LEADCTL=fcstctl ),
+                   Edit( LAUF='12',VORHI=6, LEAD=assimc, LEADCTL=assimc ),
 
                    # add suite Families and Tasks
                    family_dummy(timing['c12_1'],timing['c12_2']),

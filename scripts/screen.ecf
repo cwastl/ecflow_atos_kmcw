@@ -73,19 +73,13 @@ else
   member=${mem}
 fi
 
-if [ ${eda} -eq 1 ]
-then
-   if [[ ${mem} == "00" ]]
-   then
-     export LPERTURB=.FALSE. #obs perturbations
-     export NAEMEMBER=0      #needed for obs perturbation
-   else
-     export LPERTURB=.TRUE.
-     export NAEMEMBER=$member
-   fi
+if [[ ${mem} == "00" || ${eda} -eq 0 ]]
+then 
+  export LPERTURB=.FALSE. #obs perturbations
+  export NAEMEMBER=0      #needed for obs perturbation
 else
-   export LPERTURB=.FALSE. #obs perturbations
-   export NAEMEMBER=0      #needed for obs perturbation
+  export LPERTURB=.TRUE.
+  export NAEMEMBER=$member
 fi
 
 LSPRT=.TRUE.

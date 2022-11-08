@@ -40,7 +40,6 @@ date=%DATUM%
 run=%LAUF%
 mem=%MEMBER%
 assimc=%ASSIMC%
-seda=%SEDA%
 user=%USER%
 
 ###############Run setup script for environment###########################
@@ -112,22 +111,10 @@ LINISNOW2=.FALSE.
 [[ -s ./laketemperatures.txt ]] && LINILAKE=".TRUE."
 sed -e "s/{LINILAKE}/${LINILAKE}/g" ${NAMELOIMAIN} >./EXSEG1.nam
 
-#if [[ ${mem} == "00" || ${seda} -eq 0 ]]
-if [[ ${seda} -eq 0 ]]
-then
-
-  cp ${BATORODBFILE} ./ecma_raw.tar
-  tar xvf ecma_raw.tar
-  ln -s ECMA.IOASSIGN IOASSIGN
-  ln -s ECMA.IOASSIGN IOASSIGN.ECMA
-
-else
-  cp ${SCREENSURFRESULTFILE} ./ecma_raw.tar
-  tar xvf ecma_raw.tar
-  ln -s ECMA/ECMA.IOASSIGN IOASSIGN
-  ln -s ECMA/ECMA.IOASSIGN IOASSIGN.ECMA
-
-fi
+cp ${SCREENSURFRESULTFILE} ./ecma_raw.tar
+tar xvf ecma_raw.tar
+ln -s ECMA/ECMA.IOASSIGN IOASSIGN
+ln -s ECMA/ECMA.IOASSIGN IOASSIGN.ECMA
 
 cp ${CLIMDIR}/POLYNOMES.ISBA fort.61
 

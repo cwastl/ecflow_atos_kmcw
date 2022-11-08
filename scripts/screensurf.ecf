@@ -40,6 +40,7 @@ date=%DATUM%
 run=%LAUF%
 mem=%MEMBER%
 assimc=%ASSIMC%
+seda=%SEDA%
 user=%USER%
 
 #################Run setup script for environment#########################
@@ -72,8 +73,8 @@ else
   member=${mem}
 fi
 
-if [[ ${mem} == "00" ]]
-then
+if [[ ${mem} == "00" || ${seda} -eq 0 ]]
+then 
   export LPERTURB=.FALSE. #obs perturbations
   export NAEMEMBER=0      #needed for obs perturbation
 else
