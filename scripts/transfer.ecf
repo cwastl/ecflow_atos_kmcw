@@ -208,7 +208,7 @@ if [ ${leadtime} -gt ${assimc} ]; then
 
          done
 
-         if (( ${CHECKTRANS} == 20 || ${CHECKTRANSOK} == 20 ))
+         if (( ${CHECKTRANS} == 21 || ${CHECKTRANSOK} == 21 ))
          then
 
             ecflow_client --label=error "Copying failed, exit"
@@ -226,7 +226,7 @@ if [ ${leadtime} -gt ${assimc} ]; then
    
        fi
 
-       if [[ ${WAITCOUNT} -eq 60 ]]
+       if [[ ${WAITCOUNT} -eq 121 ]]
        then
 
           ecflow_client --label=error "${INFILE} still does not yet exist, exit!"
