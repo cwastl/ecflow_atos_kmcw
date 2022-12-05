@@ -175,6 +175,7 @@ then
    # Get VARBC file from SCREENING, ODB file from CCMA and first guess
    cp ${SCREENDIR}/VARBC.cycle ./VARBC.cycle
    cp ${ADDSURFRESULTFILE} ./ICMSHMINIIMIN
+   cp ${ADDSURFRESULTFILE} ./MXMINI999+0000
    cp ${SCREENDIR}/CCMA.tar CCMA.tar
 
    tar -xvf CCMA.tar
@@ -250,24 +251,24 @@ then
    tar cvf CCMA_minim.tar CCMA*
    mv CCMA_minim.tar ${MINIMDIR}/CCMA_minim.tar
    cp MXMINI999+0000 ${MINIMDIR}/MXMINI999+0000
-
-   sleep 10
-   # BLEND hydrometeors with first guess file
-   export DR_HOOK_NOT_MPI="yes"
-   if [[ $LHYDRO3D == ".TRUE." ]]
-   then
-     ecflow_client --label=info "Blend hydrometeors"
-    # Add other 3D fields
-     cp MXMINI999+0000 AldsurfA
-     cp ${ADDSURFRESULTFILE} AldsurfB
-     cp AldsurfA AldsurfC
-     cp $NAMELBLEND fort.4
-
-     sleep 10
-     srun $BLENDBIN > ${LOGDIR}/BLEND_%ECF_TRYNO%_${mem}.log 2>&1
-
-     mv AldsurfC ${MINIMRESULTFILE}
-   fi
+   cp MXMINI999+0000 ${MINIMDIR}/MXMINI999+0000_blend
+#   sleep 10
+#   # BLEND hydrometeors with first guess file
+#   export DR_HOOK_NOT_MPI="yes"
+#   if [[ $LHYDRO3D == ".TRUE." ]]
+#   then
+#     ecflow_client --label=info "Blend hydrometeors"
+#    # Add other 3D fields
+#     cp MXMINI999+0000 AldsurfA
+#     cp ${ADDSURFRESULTFILE} AldsurfB
+#     cp AldsurfA AldsurfC
+#     cp $NAMELBLEND fort.4
+#
+#     sleep 10
+#     srun $BLENDBIN > ${LOGDIR}/BLEND_%ECF_TRYNO%_${mem}.log 2>&1
+#
+#     mv AldsurfC ${MINIMRESULTFILE}
+#   fi
 
    cp NODE.001_01 ${LOGDIR}/NODE_MINIMIZATION_${date}${run}_%ECF_TRYNO%_${mem}
 
