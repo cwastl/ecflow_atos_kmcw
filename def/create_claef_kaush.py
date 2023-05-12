@@ -32,17 +32,18 @@ schedule = "/usr/local/apps/schedule/1.4/bin/schedule";
 suite_name = "claef"
 
 #ensemble members
-members = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+members = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
+#members = [0,1]
 #members = [0]
 
 # forecasting range
-fcst = 60
+fcst = 6
 
 # forecasting range control member
-fcstctl = 60
+fcstctl = 6
 
 # coupling frequency
-couplf = 1
+couplf = 3
 
 # use 15min output for precipitation
 step15 = False
@@ -123,9 +124,9 @@ debug = 0;
 anzmem = len(members)
 
 # date to start the suite
-start_date = int(now.strftime('%Y%m%d'))
-#start_date = 20220504
-end_date = 20221231
+#start_date = int(now.strftime('%Y%m%d'))
+start_date = 20220622
+end_date = 20220622
 
 ###########################################
 #####define Families and Tasks#############
@@ -308,7 +309,7 @@ def family_main():
             [
                Task("927",
                   Trigger("../../dummy/ez_trigger/dummy1 == complete"),
-                  Event("d"),
+                  Complete(":ASSIM == 1 or :ASSIM == 0"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
                      NP=16,
@@ -326,6 +327,7 @@ def family_main():
             [
                Task("927surf",
                   Trigger("../../dummy/ez_trigger/dummy1 == complete"),
+                  Complete(":ASSIM == 1 or :ASSIM == 0"),
 #                  Trigger("pgd == complete"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
@@ -344,7 +346,7 @@ def family_main():
             # Task assim/sstex
             [
                Task("sstex",
-                  Trigger(":ASSIM == 1 and ../../obs/getobs == complete and ../MEM_{:02d}/927:d".format(mem)),
+                  Trigger(":ASSIM == 1 and ../../obs/getobs == complete".format(mem)),
                   Complete(":ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
@@ -513,7 +515,7 @@ def family_main():
             [
                Task("progrid",
                   Trigger("../MEM_{:02d}/001:e".format(mem)),
-                  Complete(":LEAD < :LEADT"),
+                  Complete(":ASSIM == 1 or :ASSIM == 0"),
                   Event("f"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
@@ -534,7 +536,7 @@ def family_main():
             [
                Task("addgrib",
                   Trigger("../MEM_{:02d}/progrid:f".format(mem)),
-                  Complete(":LEAD < :LEADT"),
+                  Complete(":ASSIM == 1 or :ASSIM == 0"),
                   Event("g"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
@@ -668,7 +670,7 @@ defs = Defs().add(
 
                 # Main Runs per day (00, 03, 06, 09,  12, 15, 18, 21)
                 Family("RUN_00",
-                   Edit( LAUF='00', VORHI=6, LEAD=fcst, LEADCTL=fcstctl ),
+                   Edit( LAUF='00', VORHI=0, LEAD=assimc, LEADCTL=assimc ),
 
                    # add suite Families and Tasks
                    family_dummy(timing['c00_1'],timing['c00_2']),
@@ -698,52 +700,12 @@ defs = Defs().add(
                 ),
 
                 Family("RUN_09",
-                   Edit( LAUF='09', VORHI=9, LEAD=assimc, LEADCTL=assimc ),
+                   Edit( LAUF='09', VORHI=9, LEAD=fcst, LEADCTL=fcstctl ),
 
                    # add suite Families and Tasks
                    family_dummy(timing['c09_1'],timing['c09_2']),
                    family_cleaning(),
                    family_obs(timing['o09_1'],timing['o09_2']),
-                   family_main(),
-                ),
-
-                Family("RUN_12",
-                   Edit( LAUF='12',VORHI=6, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c12_1'],timing['c12_2']),
-                   family_cleaning(),
-                   family_obs(timing['o12_1'],timing['o12_2']),
-                   family_main(),
-                ),
-
-                Family("RUN_15",
-                   Edit( LAUF='15', VORHI=9, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c15_1'],timing['c15_2']),
-                   family_cleaning(),
-                   family_obs(timing['o15_1'],timing['o15_2']),
-                   family_main(),
-                ),
-
-                Family("RUN_18",
-                   Edit( LAUF='18',VORHI=6, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c18_1'],timing['c18_2']),
-                   family_cleaning(),
-                   family_obs(timing['o18_1'],timing['o18_2']),
-                   family_main(),
-               ),
-
-                Family("RUN_21",
-                   Edit( LAUF='21', VORHI=9, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c21_1'],timing['c21_2']),
-                   family_cleaning(),
-                   family_obs(timing['o21_1'],timing['o21_2']),
                    family_main(),
                 ),
 
