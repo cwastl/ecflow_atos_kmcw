@@ -33,14 +33,15 @@ suite_name = "claef"
 
 #ensemble members
 members = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
-#members = [0,1]
+#members = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40]
+#members = [41,42,43,44,45,46,47,48,49,50]
 #members = [0]
 
 # forecasting range
-fcst = 6
+fcst = 3
 
 # forecasting range control member
-fcstctl = 6
+fcstctl = 3
 
 # coupling frequency
 couplf = 3
@@ -125,8 +126,8 @@ anzmem = len(members)
 
 # date to start the suite
 #start_date = int(now.strftime('%Y%m%d'))
-start_date = 20220622
-end_date = 20220622
+start_date = 20230509
+end_date = 20230509
 
 ###########################################
 #####define Families and Tasks#############
@@ -151,69 +152,13 @@ def family_dummy(startc1,startc2):
                   ),
                   Label("run", ""),
                   Label("info", ""),
-                  Defstatus("suspended"),
-               )
-            ]
-         )
-       ],
-
-       # Family check_obs
-       [
-         Family("check_obs",
-
-            # Task dummy2
-            [
-               Task("dummy2",
-                  Complete("../../obs == complete"),
-                  Edit(
-                     NP=1,
-                     CLASS='nf',
-                     NAME="dummy2",
-                  ),
-                  Label("run", ""),
-                  Label("error", ""),
-                  Time(startc1),
-               )
-            ]
-         )
-       ],
-
-       # Family check_main
-       [
-         Family("check_main",
-
-            # Task dummy2
-            [
-               Task("dummy2",
-                  Complete("../../main == complete"),
-                  Edit(
-                     NP=1,
-                     CLASS='nf',
-                     NAME="dummy2",
-                  ),
-                  Label("run", ""),
-                  Label("error", ""),
-                  Time(startc2),
+                  Complete("1 == 1"),
                )
             ]
          )
        ]
-    )
+     )
 
-def family_cleaning():
-
-   return Task("cleaning",
-             Trigger("dummy/ez_trigger/dummy1 == complete"),
-             Edit(
-                NP=1,
-                CLASS='nf',
-                NAME="cleaning",
-                ANZMEMB=anzmem,
-             ),
-             Label("run", ""),
-             Label("info", ""),
-
-          )
 def family_obs(starto1,starto2) :
 
     # Family OBS
@@ -224,7 +169,7 @@ def family_obs(starto1,starto2) :
        # Task assim/getobs
        [
           Task("getobs",
-             Trigger(":ASSIM == 1 and /claef:TIME > {} and /claef:TIME < {}".format(starto1,starto2)),
+             Trigger(":ASSIM == 1 and ../dummy/ez_trigger/dummy1 == complete"),
              Complete(":ASSIM == 0"),
              Meter("obsprog", -1, 3, 3),
              Edit(
@@ -309,7 +254,8 @@ def family_main():
             [
                Task("927",
                   Trigger("../../dummy/ez_trigger/dummy1 == complete"),
-                  Complete(":ASSIM == 1 or :ASSIM == 0"),
+                  Event("d"),
+                #  Complete(":ASSIM == 1 or :ASSIM == 0"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
                      NP=16,
@@ -346,7 +292,7 @@ def family_main():
             # Task assim/sstex
             [
                Task("sstex",
-                  Trigger(":ASSIM == 1 and ../../obs/getobs == complete".format(mem)),
+                  Trigger(":ASSIM == 1 and ../../obs/getobs == complete and ../MEM_{:02d}/927:d".format(mem)),
                   Complete(":ASSIM == 1 and ../../obs/getobs:obsprog == 0 or :ASSIM == 0"),
                   Edit(
                      MEMBER="{:02d}".format(mem),
@@ -628,87 +574,23 @@ defs = Defs().add(
 
              ),
 
-             Family("admin",
-
-                # Task complete if something went wrong on the previous day
-                Task("complete", Cron(timing['comp']),
-                   Edit( NAME="complete", CLASS="nf", NP=1, SUITENAME=suite_name ),
-                   Label("info", ""),
-                ),
-
-                # Task dummy3
-                Task("dummy3",
-                   Edit(NAME="dummy3", CLASS="nf", NP=1 ),
-                   Label("info", ""),
-                   Defstatus("suspended"),
-                ),
-
-                # Task dummy4
-                Task("dummy4", Cron(timing["c00_3"]),Trigger("dummy3 == complete"),
-                   Edit(NAME="dummy4", CLASS='nf', NP=1 ),
-                   Label("info", ""),
-               ),
-
-
-             ),
-
              Family("runs",
 
                 RepeatDate("DATUM",start_date,end_date),
 
-                # Task dummy
-                Task("dummy",
-                  Edit(
-                     NP=1,
-                     CLASS='nf',
-                     NAME="dummy",
-                  ),
-                  Label("run", ""),
-                  Label("info", ""),
-                  Defstatus("suspended"),
-                ),
-
                 # Main Runs per day (00, 03, 06, 09,  12, 15, 18, 21)
                 Family("RUN_00",
-                   Edit( LAUF='00', VORHI=0, LEAD=assimc, LEADCTL=assimc ),
+#                   RepeatString("LAUF",["00", "03", "06", "09", "12", "15", "18", "21" ]),
+                   RepeatString("LAUF",["00"]),
+                   Edit( VORHI=0, LEAD=fcst, LEADCTL=fcstctl ),
 
                    # add suite Families and Tasks
                    family_dummy(timing['c00_1'],timing['c00_2']),
-                   family_cleaning(),
+#                   family_cleaning(),
                    family_obs(timing['o00_1'],timing['o00_2']),
                    family_main(),
                 ),
-
-                Family("RUN_03",
-                   Edit( LAUF='03', VORHI=9, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c03_1'],timing['c03_2']),
-                   family_cleaning(),
-                   family_obs(timing['o03_1'],timing['o03_2']),
-                   family_main(),
-                ),
-
-                Family("RUN_06",
-                   Edit( LAUF='06',VORHI=6, LEAD=assimc, LEADCTL=assimc ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c06_1'],timing['c06_2']),
-                   family_cleaning(),
-                   family_obs(timing['o06_1'],timing['o06_2']),
-                   family_main(),
-                ),
-
-                Family("RUN_09",
-                   Edit( LAUF='09', VORHI=9, LEAD=fcst, LEADCTL=fcstctl ),
-
-                   # add suite Families and Tasks
-                   family_dummy(timing['c09_1'],timing['c09_2']),
-                   family_cleaning(),
-                   family_obs(timing['o09_1'],timing['o09_2']),
-                   family_main(),
-                ),
-
+                
             )
          )
        )
